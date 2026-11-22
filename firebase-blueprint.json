@@ -329,6 +329,20 @@
         "createdAt": { "type": "string" }
       },
       "required": ["id", "methodId", "shapeSignature", "createdAt"]
+    },
+    "ErrorLog": {
+      "title": "ErrorLog",
+      "description": "Structured client and Firestore operation error telemetry for diagnostics and incident audit",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 80 },
+        "operationType": { "type": "string", "enum": ["create", "update", "delete", "list", "get", "write", "runtime"] },
+        "path": { "type": "string", "maxLength": 200 },
+        "error": { "type": "string", "maxLength": 2000 },
+        "actorId": { "type": "string", "maxLength": 80 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "operationType", "error", "createdAt"]
     }
   },
   "firestore": {
@@ -411,6 +425,14 @@
     "/shape_library/{shapeId}": {
       "schema": "ShapePattern",
       "description": "Learned confirmed TrxID shape patterns per payment method"
+    },
+    "/audit/{logId}": {
+      "schema": "AuditLog",
+      "description": "Server-side security, payment verification, and administration audit trail"
+    },
+    "/error_logs/{errorId}": {
+      "schema": "ErrorLog",
+      "description": "Structured error logs captured from client/database telemetry boundaries"
     }
   }
 }

@@ -9,7 +9,7 @@ import crypto from 'crypto';
 import dns from 'dns';
 import { GoogleGenAI } from '@google/genai';
 import { IStore, FirestoreStore, FileStore, MemoryStore } from './store/index.js';
-import { createGeminiClient, resolveGeminiModel } from './ai/client.js';
+import { createGeminiClient, resolveGeminiModel, generateWithRetry } from './ai/client.js';
 import { CATALOG_SERVICES } from './orders/catalog.js';
 import { evaluatePaymentMatch, normalizeTrx } from './payments/matcher.js';
 import {
@@ -259,8 +259,8 @@ export function installMrsCore(app: Express, options: MrsCoreOptions = {}) {
   const GEMINI_MODEL = resolveGeminiModel();
   const OWNER_EMAIL = process.env.OWNER_EMAIL || 'mr216873@gmail.com';
   const ADMIN_PASSWORD = process.env.MRS_ADMIN_PASSWORD || 'mrs-admin-secure-2026';
-  const SMS_SIGNING_KEY = process.env.MRS_SMS_SIGNING_KEY || 'mrs-sms-key-24chars-min-secret';
-  const INGEST_SECRET = process.env.MRS_INGEST_SECRET || 'mrs-ingest-secret-32chars-min-secret';
+  const SMS_SIGNING_KEY = process.env.MRS_SMS_SIGNING_KEY || crypto.randomBytes(24).toString('hex');
+  const INGEST_SECRET = process.env.MRS_INGEST_SECRET || crypto.randomBytes(32).toString('hex');
   const CRON_SECRET = process.env.MRS_CRON_SECRET || INGEST_SECRET;
 
   // Store helpers for persisted configuration & operations
@@ -861,7 +861,7 @@ Respond as JSON with exact keys:
 }`;
 
     try {
-      const response = await ai.models.generateContent({
+      const response = await generateWithRetry(ai, {
         model: GEMINI_MODEL,
         contents: prompt,
         config: { responseMimeType: 'application/json' },
@@ -980,7 +980,7 @@ Respond as JSON with exact keys:
     let aiAdvice: string | null = null;
     if (ai) {
       try {
-        const aiRes = await ai.models.generateContent({
+        const aiRes = await generateWithRetry(ai, {
           model: GEMINI_MODEL,
           contents: `Analyze keyword overlap between this resume and job description honestly in 3 concise bullet points. Never fabricate skills.\nJD:\n${jobDescription.slice(0, 2000)}\nRESUME:\n${resumeText.slice(0, 2500)}`,
         });
@@ -1007,7 +1007,7 @@ Respond as JSON with exact keys:
       return res.status(503).json({ success: false, error: 'Proofreading requires GEMINI_API_KEY on the server.' });
     }
     try {
-      const response = await ai.models.generateContent({
+      const response = await generateWithRetry(ai, {
         model: GEMINI_MODEL,
         contents: `Proofread and polish the following technical text. Preserve all numbers, code symbols, and URLs faithfully. Return strict JSON: {"correctedText":"...","clarityNotes":["..."],"wordCount":0}\n\nTEXT:\n${text.slice(0, 5000)}`,
         config: { responseMimeType: 'application/json' },
@@ -1031,7 +1031,7 @@ Respond as JSON with exact keys:
     }
     const catalogList = CATALOG_SERVICES.map((s) => `${s.id} (${s.serviceId}): ${s.name} — ${s.description}`).join('\n');
     try {
-      const response = await ai.models.generateContent({
+      const response = await generateWithRetry(ai, {
         model: GEMINI_MODEL,
         contents: `Pick the best matching service from the catalog below for this user goal. Return JSON: {"serviceId":"<slug id>","reason":"..."}\nCATALOG:\n${catalogList}\nGOAL:\n${goal.slice(0, 1500)}`,
         config: { responseMimeType: 'application/json' },
@@ -1748,7 +1748,7 @@ Respond as JSON with exact keys:
 Order: ${order.id} (${order.serviceName}), State: ${order.status}.
 Client says: "${text}"
 Reply concisely and helpfully.`;
-        const aiRes = await ai.models.generateContent({ model: GEMINI_MODEL, contents: prompt });
+        const aiRes = await generateWithRetry(ai, { model: GEMINI_MODEL, contents: prompt });
         if (aiRes.text) {
           aiMsg = {
             id: `MSG-${Date.now() + 1}`,
@@ -3285,6 +3285,35 @@ Reply concisely and helpfully.`;
     return res.json({ entries });
   });
 
+  app.get('/api/admin/error-logs', adminAuth, async (_req: Request, res: Response) => {
+    const logs = await store.list<any>('error_logs');
+    logs.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    return res.json({ logs: logs.slice(0, 100) });
+  });
+
+  app.post('/api/telemetry/client-error', async (req: Request, res: Response) => {
+    const { operationType = 'runtime', path = '/', error } = req.body || {};
+    const cleanErr = String(error || '').trim().slice(0, 2000);
+    if (!cleanErr) {
+      return res.status(400).json({ success: false, error: 'Error description required.' });
+    }
+    const allowedOps = new Set(['create', 'update', 'delete', 'list', 'get', 'write', 'runtime']);
+    const op = allowedOps.has(String(operationType)) ? String(operationType) : 'runtime';
+    const token = extractBearerToken(req, 'mrs_session');
+    const payload = token ? verifyToken(token) : null;
+    const id = `ERR-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+    const entry = {
+      id,
+      operationType: op,
+      path: String(path || '/').slice(0, 200),
+      error: cleanErr,
+      actorId: String(payload?.clientId || 'anonymous').slice(0, 80),
+      createdAt: new Date().toISOString(),
+    };
+    await store.set('error_logs', id, entry);
+    return res.status(201).json({ success: true, id });
+  });
+
   app.get('/api/admin/email-outbox', adminAuth, async (_req: Request, res: Response) => {
     const outbox = await store.list<any>('email_outbox');
     outbox.sort((a, b) => (a.sentAt < b.sentAt ? 1 : -1));
@@ -3655,7 +3684,7 @@ Return valid JSON:
 }`;
 
     try {
-      const response = await ai.models.generateContent({
+      const response = await generateWithRetry(ai, {
         model: GEMINI_MODEL,
         contents: prompt,
         config: { responseMimeType: 'application/json' },
@@ -3692,7 +3721,7 @@ Return valid JSON:
     if (!ai) return res.status(503).json({ success: false, error: 'GEMINI_API_KEY is required for AI intake triage.' });
 
     try {
-      const response = await ai.models.generateContent({
+      const response = await generateWithRetry(ai, {
         model: GEMINI_MODEL,
         contents: `Triage this M R S order intake objectively. Return JSON: {"isComplete":boolean,"missingFields":string[],"suggestedQuestionToClient":string,"complexity":"basic"|"standard"|"complex"|"urgent","riskFlags":string[],"threeLineSummary":string,"suggestedQuoteUSD":number}\nService: ${serviceName} (${serviceId})\nDetails:\n${String(details).slice(0, 3000)}`,
         config: { responseMimeType: 'application/json' },
@@ -3737,7 +3766,7 @@ Return valid JSON:
     let aiError = '';
     if (isLive && ai) {
       try {
-        const testRes = await ai.models.generateContent({ model: GEMINI_MODEL, contents: 'Respond with OK' });
+        const testRes = await generateWithRetry(ai, { model: GEMINI_MODEL, contents: 'Respond with OK' });
         aiAnswered = Boolean(testRes.text);
       } catch (e: any) {
         aiError = e.message;
@@ -4020,7 +4049,7 @@ Subject: ${subject || 'Order Update'}
 Context: ${String(contextText || '').slice(0, 2000)}
 Owner instruction: ${String(instruction || 'Respond politely and clearly.').slice(0, 500)}`;
 
-      const aiRes = await ai.models.generateContent({ model: GEMINI_MODEL, contents: prompt });
+      const aiRes = await generateWithRetry(ai, { model: GEMINI_MODEL, contents: prompt });
       return res.json({
         success: true,
         draft: aiRes.text || '',

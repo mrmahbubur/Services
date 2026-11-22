@@ -24,6 +24,7 @@
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
     "noEmit": true
   },
   "exclude": ["dist", "tests"]
