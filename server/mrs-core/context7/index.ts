@@ -1,4 +1,5 @@
-import { CATALOG_SERVICES } from '../orders/catalog.ts';
+import { CATALOG_SERVICES } from '../orders/catalog.js';
+import { resolveGeminiModel } from '../ai/client.js';
 
 export interface Context7Dimension {
   dimensionNumber: number;
@@ -100,7 +101,7 @@ export function buildContext7Manifest(): Context7Manifest {
       summary: 'Automated fulfillment pipelines (S-MRS-06 CV ATS, S-MRS-02 Writing, S-MRS-11 Data Entry).',
       status: 'active',
       attributes: {
-        model: process.env.MRS_GEMINI_MODEL || 'gemini-2.5-flash',
+        model: resolveGeminiModel(),
         qaChecks: ['ATS Format Integrity', 'Spell & Grammar', 'Credential Fidelity', 'Deliverable Format'],
         deliverablesLockedUntilPaid: true,
       },

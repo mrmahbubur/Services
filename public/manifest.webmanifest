@@ -1,0 +1,17 @@
+{
+  "name": "M R S — Professional Automation & Digital Services",
+  "short_name": "M R S",
+  "description": "Automate. Deliver. Grow. Browse technical services, request quotes, access Client ID & PIN portal, and verify payments securely.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B1220",
+  "theme_color": "#0B1220",
+  "icons": [
+    {
+      "src": "/brand/icons/mrs_icon_v1.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

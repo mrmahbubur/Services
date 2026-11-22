@@ -27,6 +27,7 @@ import {
 import { normalizeTrx } from './matcher.js';
 import { areHashesPerceptuallySimilar } from './imageInspector.js';
 import { IStore } from '../store/index.js';
+import { resolveGeminiModel } from '../ai/client.js';
 
 export const DEFAULT_AUTO_VERIFY_CONFIG: AutoVerifyConfig = {
   methodModes: {
@@ -573,7 +574,7 @@ Evaluate carefully and score 0..100:
     });
 
     const response = await ai.models.generateContent({
-      model: process.env.MRS_GEMINI_MODEL || 'gemini-4-hydrogen',
+      model: resolveGeminiModel(),
       contents: { parts },
       config: {
         responseMimeType: 'application/json',

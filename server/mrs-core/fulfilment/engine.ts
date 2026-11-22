@@ -7,6 +7,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { OrderRecord, FulfilmentJob, DeliverableRecord } from '../types.js';
 import { IStore } from '../store/index.js';
+import { generateWithRetry, resolveGeminiModel } from '../ai/client.js';
 
 export async function processOrderJob(
   order: OrderRecord,
@@ -31,7 +32,7 @@ export async function processOrderJob(
     return { deliverables, qa };
   }
 
-  const model = process.env.MRS_GEMINI_MODEL || 'gemini-2.5-flash';
+  const model = resolveGeminiModel();
 
   // 2. Automated AI draft services require real Gemini execution
   if (order.serviceId === 'S-MRS-06' || order.serviceId === 'ats-cv-resume') {
@@ -69,7 +70,7 @@ export async function processOrderJob(
 
     let modelDraft = '';
     try {
-      const response = await ai.models.generateContent({
+      const response = await generateWithRetry(ai, {
         model,
         contents: `You are an expert executive resume writer assisting M R S Services.
 Restructure and optimize the following CV strictly based ONLY on the facts supplied below.

@@ -9,6 +9,7 @@ import crypto from 'crypto';
 import dns from 'dns';
 import { GoogleGenAI } from '@google/genai';
 import { IStore, FirestoreStore, FileStore, MemoryStore } from './store/index.js';
+import { createGeminiClient, resolveGeminiModel } from './ai/client.js';
 import { CATALOG_SERVICES } from './orders/catalog.js';
 import { evaluatePaymentMatch, normalizeTrx } from './payments/matcher.js';
 import {
@@ -253,16 +254,9 @@ export function installMrsCore(app: Express, options: MrsCoreOptions = {}) {
   app.use(express.json({ limit: '15mb' }));
   app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
-  const ai =
-    options.ai ||
-    (process.env.GEMINI_API_KEY
-      ? new GoogleGenAI({
-          apiKey: process.env.GEMINI_API_KEY,
-          httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
-        })
-      : null);
+  const ai = options.ai || createGeminiClient(process.env.GEMINI_API_KEY);
 
-  const GEMINI_MODEL = process.env.MRS_GEMINI_MODEL || 'gemini-4-hydrogen';
+  const GEMINI_MODEL = resolveGeminiModel();
   const OWNER_EMAIL = process.env.OWNER_EMAIL || 'mr216873@gmail.com';
   const ADMIN_PASSWORD = process.env.MRS_ADMIN_PASSWORD || 'mrs-admin-secure-2026';
   const SMS_SIGNING_KEY = process.env.MRS_SMS_SIGNING_KEY || 'mrs-sms-key-24chars-min-secret';

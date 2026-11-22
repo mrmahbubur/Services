@@ -23,6 +23,7 @@ import { FreeToolsPage } from './pages/FreeToolsPage';
 import { StatusPage } from './pages/StatusPage';
 import { ContentPolicyPage } from './pages/ContentPolicyPage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { CheckCircle2, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
 const ToastNotification: React.FC = () => {
@@ -162,11 +163,13 @@ const AppRoutes: React.FC = () => {
 
 export function App() {
   return (
-    <AppProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
-    </AppProvider>
+    <ErrorBoundary>
+      <AppProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </AppProvider>
+    </ErrorBoundary>
   );
 }
 

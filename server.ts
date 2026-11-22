@@ -8,24 +8,14 @@ import { GoogleGenAI } from '@google/genai';
 import { initializeApp, applicationDefault, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { installMrsCore, FirestoreStore, FileStore } from './server/mrs-core/index.js';
+import { createGeminiClient } from './server/mrs-core/ai/client.js';
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-let ai: GoogleGenAI | null = null;
-if (GEMINI_API_KEY) {
-  ai = new GoogleGenAI({
-    apiKey: GEMINI_API_KEY,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      },
-    },
-  });
-}
+const ai: GoogleGenAI | null = createGeminiClient(process.env.GEMINI_API_KEY);
 
 let db: any = null;
 let firebaseProjectId = '';
