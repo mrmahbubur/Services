@@ -1,0 +1,108 @@
+import express from 'express';
+import { createServer as createViteServer } from 'vite';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+import { GoogleGenAI } from '@google/genai';
+import { initializeApp, applicationDefault, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { installMrsCore, FirestoreStore, FileStore } from './server/mrs-core/index.js';
+
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+let ai: GoogleGenAI | null = null;
+if (GEMINI_API_KEY) {
+  ai = new GoogleGenAI({
+    apiKey: GEMINI_API_KEY,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
+    },
+  });
+}
+
+let db: any = null;
+let firebaseProjectId = '';
+let firebaseDbId = '';
+try {
+  const firebaseConfig = JSON.parse(fs.readFileSync('./firebase-applet-config.json', 'utf8'));
+  firebaseProjectId = firebaseConfig.projectId || '';
+  firebaseDbId = firebaseConfig.firestoreDatabaseId || '';
+  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
+  const firebaseApp = initializeApp({
+    credential: serviceAccount ? cert(JSON.parse(serviceAccount)) : applicationDefault(),
+    projectId: firebaseProjectId,
+  });
+  db = getFirestore(firebaseApp, firebaseDbId);
+} catch (e) {
+  console.warn('Firebase admin initialization notice (using durable local store):', e);
+}
+
+const app = express();
+
+const store = db
+  ? new FirestoreStore(db, { projectId: firebaseProjectId, databaseId: firebaseDbId })
+  : new FileStore();
+
+function getPort(): number {
+  const portArgIndex = process.argv.indexOf('--port');
+  if (portArgIndex !== -1 && process.argv[portArgIndex + 1]) {
+    const val = Number(process.argv[portArgIndex + 1]);
+    if (!isNaN(val) && val > 0) return val;
+  }
+  if (process.env.NODE_ENV === 'production' && process.env.PORT) {
+    const envPort = Number(process.env.PORT);
+    if (!isNaN(envPort) && envPort > 0) return envPort;
+  }
+  return 3000;
+}
+
+function getHost(): string {
+  const hostArgIndex = process.argv.indexOf('--host');
+  if (hostArgIndex !== -1 && process.argv[hostArgIndex + 1]) {
+    return process.argv[hostArgIndex + 1];
+  }
+  return '0.0.0.0';
+}
+
+const PORT = getPort();
+const HOST = getHost();
+
+async function startServer() {
+  if (store instanceof FirestoreStore) {
+    await store.init();
+  }
+  installMrsCore(app, {
+    store,
+    ai,
+  });
+
+  if (process.env.NODE_ENV !== 'production') {
+    const vite = await createViteServer({
+      server: { middlewareMode: true, hmr: false },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(__dirname, 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (_req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
+  app.listen(PORT, HOST, () => {
+    console.log(`M R S platform server listening on http://${HOST}:${PORT}`);
+  });
+}
+
+startServer().catch((err) => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
+});

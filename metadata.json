@@ -1,0 +1,6 @@
+{
+  "name": "M R S — Professional Automation & Digital Services",
+  "description": "Automate. Deliver. Grow. Browse professional technical and digital solutions, request quotes, Client ID & PIN portal access, and verified payment processing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

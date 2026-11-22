@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>M R S — Professional Automation & Digital Services</title>
+    <meta name="description" content="Automate. Deliver. Grow. Browse professional technical and digital solutions, request quotes, Client ID & PIN portal access, and verified payment processing." />
+    <meta property="og:title" content="M R S — Professional Automation & Digital Services" />
+    <meta property="og:description" content="Automate. Deliver. Grow. Browse professional technical and digital solutions, request quotes, Client ID & PIN portal access, and verified payment processing." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/brand/social/mrs_og_v1.svg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="/brand/social/mrs_og_v1.svg" />
+    <link rel="icon" type="image/svg+xml" href="/brand/icons/mrs_icon_v1.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#0B1220" id="theme-color-meta" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('mrs_theme');
+          var isDark = saved ? saved === 'dark' : true;
+          var root = document.documentElement;
+          if (isDark) {
+            root.classList.add('dark');
+            root.classList.remove('light');
+            root.setAttribute('data-theme', 'dark');
+            root.style.colorScheme = 'dark';
+          } else {
+            root.classList.remove('dark');
+            root.classList.add('light');
+            root.setAttribute('data-theme', 'light');
+            root.style.colorScheme = 'light';
+            var meta = document.getElementById('theme-color-meta');
+            if (meta) meta.setAttribute('content', '#F6F8FC');
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

@@ -1,0 +1,416 @@
+{
+  "entities": {
+    "Service": {
+      "title": "Service",
+      "description": "Cataloged technical and digital services across M R S, Gravatar, and IPTV categories",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "category": { "type": "string", "enum": ["M R S Services", "Gravatar Services", "M R S IPTV"] },
+        "name": { "type": "string" },
+        "shortDescription": { "type": "string" },
+        "inclusions": { "type": "array" },
+        "typicalTurnaround": { "type": "string" },
+        "priceType": { "type": "string", "enum": ["fixed", "hourly", "quote", "plan"] },
+        "minPriceUSD": { "type": "number" },
+        "maxPriceUSD": { "type": "number" },
+        "fixedPriceUSD": { "type": "number" },
+        "rateUSD": { "type": "string" },
+        "rateBDT": { "type": "string" },
+        "currency": { "type": "string" },
+        "active": { "type": "boolean" },
+        "sortOrder": { "type": "number" },
+        "icon": { "type": "string" }
+      },
+      "required": ["id", "category", "name", "priceType", "active"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "Authenticated client record identified by unique Client ID and PIN hash",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "country": { "type": "string" },
+        "pinHash": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "suspended", "archived"] },
+        "createdAt": { "type": "string" },
+        "lastLogin": { "type": "string" },
+        "failedAttempts": { "type": "number" },
+        "lockoutUntil": { "type": "string" }
+      },
+      "required": ["clientId", "name", "email", "pinHash", "status", "createdAt"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Client order or quote request with lifecycle stepper",
+      "type": "object",
+      "properties": {
+        "orderId": { "type": "string" },
+        "clientId": { "type": "string" },
+        "serviceId": { "type": "string" },
+        "category": { "type": "string" },
+        "serviceName": { "type": "string" },
+        "details": { "type": "string" },
+        "quoteAmount": { "type": "number" },
+        "currency": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Awaiting payment", "Payment submitted", "Verified", "In progress", "Delivered", "Rejected", "Expired"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "hoursEstimated": { "type": "number" },
+        "quoteExpiresAt": { "type": "string" },
+        "deliverableNotes": { "type": "string" }
+      },
+      "required": ["orderId", "clientId", "serviceId", "status", "createdAt"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Payment remittance proof submitted by client for admin verification",
+      "type": "object",
+      "properties": {
+        "paymentId": { "type": "string" },
+        "orderId": { "type": "string" },
+        "clientId": { "type": "string" },
+        "method": { "type": "string" },
+        "amount": { "type": "number" },
+        "currency": { "type": "string" },
+        "reference": { "type": "string" },
+        "trxId": { "type": "string" },
+        "proofUrl": { "type": "string" },
+        "status": { "type": "string", "enum": ["Payment submitted", "Verified", "Rejected"] },
+        "verifiedBy": { "type": "string" },
+        "verifiedAt": { "type": "string" },
+        "rejectionReason": { "type": "string" },
+        "note": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["paymentId", "orderId", "clientId", "method", "amount", "currency", "reference", "trxId", "status", "createdAt"]
+    },
+    "Subscription": {
+      "title": "Subscription",
+      "description": "IPTV or recurring VIP service subscription with validity window",
+      "type": "object",
+      "properties": {
+        "subscriptionId": { "type": "string" },
+        "clientId": { "type": "string" },
+        "plan": { "type": "string", "enum": ["1-month", "2-month", "6-month", "12-month"] },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "expired", "suspended"] },
+        "credentials": { "type": "string" },
+        "serverUrl": { "type": "string" }
+      },
+      "required": ["clientId", "plan", "startDate", "endDate", "status"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Direct isolated communication between client and operations desk",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clientId": { "type": "string" },
+        "orderId": { "type": "string" },
+        "sender": { "type": "string", "enum": ["client", "admin", "system"] },
+        "senderName": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["clientId", "sender", "text", "timestamp"]
+    },
+    "Deliverable": {
+      "title": "Deliverable",
+      "description": "Completed work file download, credentials, or production repository links",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "orderId": { "type": "string" },
+        "clientId": { "type": "string" },
+        "title": { "type": "string" },
+        "summary": { "type": "string" },
+        "content": { "type": "string" },
+        "downloadUrl": { "type": "string" },
+        "format": { "type": "string" },
+        "deliveredAt": { "type": "string" }
+      },
+      "required": ["id", "orderId", "clientId", "title", "deliveredAt"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Official printable accounting invoice and payment receipt",
+      "type": "object",
+      "properties": {
+        "invoiceNumber": { "type": "string" },
+        "orderId": { "type": "string" },
+        "clientId": { "type": "string" },
+        "items": { "type": "array" },
+        "amountUSD": { "type": "number" },
+        "amountBDT": { "type": "number" },
+        "currency": { "type": "string" },
+        "method": { "type": "string" },
+        "reference": { "type": "string" },
+        "trxId": { "type": "string" },
+        "issuedDate": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["invoiceNumber", "orderId", "clientId", "amountUSD", "issuedDate", "status"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Global operational settings, payment accounts, and contact configurations",
+      "type": "object",
+      "properties": {
+        "exchangeRate": { "type": "number" },
+        "usdToBdt": { "type": "number" },
+        "ownerEmail": { "type": "string" },
+        "whatsappNumber": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "calendlyUrl": { "type": "string" },
+        "githubUrl": { "type": "string" },
+        "linkedinUrl": { "type": "string" },
+        "paymentMethods": { "type": "object" },
+        "iptvPlanPrices": { "type": "object" }
+      },
+      "required": ["ownerEmail"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable ledger of admin verifications, quote decisions, and status mutations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "action": { "type": "string" },
+        "performedBy": { "type": "string" },
+        "targetId": { "type": "string" },
+        "details": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "action", "performedBy", "timestamp"]
+    },
+    "SupportTicket": {
+      "title": "SupportTicket",
+      "description": "Client or IPTV technical support ticket tracked through resolution",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clientId": { "type": "string" },
+        "device": { "type": "string" },
+        "issueType": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "investigating", "resolved"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "description", "status", "createdAt"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Operational expense ledger entry for tools, hosting, and payment fees",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string", "enum": ["tools", "hosting", "fees", "other"] },
+        "amountUSD": { "type": "number" },
+        "date": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "title", "category", "amountUSD", "date"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Verified client feedback published on catalog services",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "orderId": { "type": "string" },
+        "clientId": { "type": "string" },
+        "serviceId": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "verified": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "orderId", "clientId", "rating", "comment", "createdAt"]
+    },
+    "OrderFile": {
+      "title": "OrderFile",
+      "description": "Client uploaded file metadata and security validation status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "orderId": { "type": "string" },
+        "clientId": { "type": "string" },
+        "name": { "type": "string" },
+        "size": { "type": "number" },
+        "mimeType": { "type": "string" },
+        "storageUrl": { "type": "string" },
+        "uploadedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "size", "uploadedAt"]
+    },
+    "ContactInquiry": {
+      "title": "ContactInquiry",
+      "description": "Public contact desk inquiry message",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "subject": { "type": "string" },
+        "message": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "message", "createdAt"]
+    },
+    "ActivationCode": {
+      "title": "ActivationCode",
+      "description": "Hashed exact-month activation code issued after verified payment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "orderId": { "type": "string" },
+        "invoiceId": { "type": "string" },
+        "paymentId": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientEmail": { "type": "string" },
+        "monthsPaid": { "type": "number" },
+        "codeHash": { "type": "string" },
+        "codeMask": { "type": "string" },
+        "status": { "type": "string" },
+        "issuedAt": { "type": "string" },
+        "expiresAt": { "type": "string" }
+      },
+      "required": ["id", "orderId", "invoiceId", "monthsPaid", "codeHash", "issuedAt"]
+    },
+    "EmailOutbox": {
+      "title": "EmailOutbox",
+      "description": "Backend AI email dispatch log for activation codes and verification receipts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "to": { "type": "string" },
+        "subject": { "type": "string" },
+        "kind": { "type": "string" },
+        "orderId": { "type": "string" },
+        "paymentId": { "type": "string" },
+        "provider": { "type": "string" },
+        "status": { "type": "string" },
+        "detail": { "type": "string" },
+        "sentAt": { "type": "string" }
+      },
+      "required": ["id", "to", "subject", "status", "sentAt"]
+    },
+    "ReferenceSample": {
+      "title": "ReferenceSample",
+      "description": "Private owner-uploaded genuine screenshot sample per payment method for Lite 6 vision comparison",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "methodId": { "type": "string" },
+        "label": { "type": "string" },
+        "mimeType": { "type": "string" },
+        "sha256": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "methodId", "mimeType", "sha256", "createdAt"]
+    },
+    "ShapePattern": {
+      "title": "ShapePattern",
+      "description": "Learned TrxID character shape pattern from Confirmed payments",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "methodId": { "type": "string" },
+        "sampleTrxId": { "type": "string" },
+        "shapeSignature": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "methodId", "shapeSignature", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/services/{serviceId}": {
+      "schema": "Service",
+      "description": "Public catalog of technical and digital services"
+    },
+    "/clients/{clientId}": {
+      "schema": "Client",
+      "description": "Private client profile records"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Client orders and quote requests"
+    },
+    "/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Payment remittance proofs"
+    },
+    "/subscriptions/{subscriptionId}": {
+      "schema": "Subscription",
+      "description": "Active IPTV VIP subscriptions"
+    },
+    "/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Direct communication logs between client and admin"
+    },
+    "/deliverables/{deliverableId}": {
+      "schema": "Deliverable",
+      "description": "Delivered digital work assets"
+    },
+    "/invoices/{invoiceId}": {
+      "schema": "Invoice",
+      "description": "Generated accounting invoices"
+    },
+    "/settings/{settingId}": {
+      "schema": "Settings",
+      "description": "System operational configuration"
+    },
+    "/config/{configId}": {
+      "schema": "Settings",
+      "description": "System operational settings document"
+    },
+    "/auditLog/{logId}": {
+      "schema": "AuditLog",
+      "description": "Administrative actions audit trail"
+    },
+    "/support_tickets/{ticketId}": {
+      "schema": "SupportTicket",
+      "description": "Technical and IPTV support tickets"
+    },
+    "/expenses/{expenseId}": {
+      "schema": "Expense",
+      "description": "Internal business expense ledger"
+    },
+    "/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Verified order reviews"
+    },
+    "/uploads/{docId}": {
+      "schema": "OrderFile",
+      "description": "Uploaded file metadata"
+    },
+    "/contact_inquiries/{inquiryId}": {
+      "schema": "ContactInquiry",
+      "description": "Public contact desk inquiries"
+    },
+    "/activation_codes/{codeId}": {
+      "schema": "ActivationCode",
+      "description": "SHA-256 hashed activation codes tied to exact paid months"
+    },
+    "/email_outbox/{emailId}": {
+      "schema": "EmailOutbox",
+      "description": "Backend email dispatch status log"
+    },
+    "/reference_samples/{sampleId}": {
+      "schema": "ReferenceSample",
+      "description": "Private owner-uploaded genuine screenshot samples per payment method"
+    },
+    "/shape_library/{shapeId}": {
+      "schema": "ShapePattern",
+      "description": "Learned confirmed TrxID shape patterns per payment method"
+    }
+  }
+}

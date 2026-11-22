@@ -1,0 +1,169 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --ds-version: "2.0";
+
+    /* Light Mode Theme Tokens (Custom Instructions §Theme rules) */
+    --color-bg: #F6F8FC;
+    --color-surface: #FFFFFF;
+    --color-elevated: #EEF2F9;
+    --color-text: #0B1220;
+    --color-muted: #475569;
+    --color-border: #CBD5E1;
+    --color-accent: #0E7490;
+    --color-accent-bg: #0891B2;
+    --color-success: #047857;
+    --color-warning: #B45309;
+    --color-danger: #BE123C;
+
+    /* Palette Constants */
+    --bg-dark: #0B1220;
+    --surface-dark: #111B2E;
+    --elevated-dark: #16233B;
+    --border-dark: #22314D;
+    --text-dark: #E6EDF7;
+    --muted-dark: #8FA3C0;
+
+    --bg-light: #F6F8FC;
+    --surface-light: #FFFFFF;
+    --elevated-light: #EEF2F9;
+    --border-light: #CBD5E1;
+    --text-light: #0B1220;
+    --muted-light: #475569;
+
+    /* Typography */
+    --font-heading: 'Space Grotesk', 'Noto Sans Bengali', system-ui, sans-serif;
+    --font-body: 'Inter', 'Noto Sans Bengali', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    /* 4px Spacing Scale */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-12: 48px;
+    --space-16: 64px;
+
+    /* Radii & Single Soft Shadow */
+    --radius-control: 10px;
+    --radius-card: 16px;
+    --shadow-soft: 0 8px 24px -8px rgba(2, 6, 23, 0.35);
+
+    /* Motion */
+    --motion-fast: 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    --motion-normal: 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .dark, [data-theme="dark"] {
+    --color-bg: #0B1220;
+    --color-surface: #111B2E;
+    --color-elevated: #16233B;
+    --color-text: #E6EDF7;
+    --color-muted: #8FA3C0;
+    --color-border: #22314D;
+    --color-accent: #22D3EE;
+    --color-accent-bg: #22D3EE;
+    --color-success: #34D399;
+    --color-warning: #F59E0B;
+    --color-danger: #FB7185;
+  }
+
+  html {
+    font-size: 16px;
+    overflow-x: clip;
+    max-width: 100%;
+  }
+
+  body {
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.55;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    @apply antialiased selection:bg-cyan-500 selection:text-slate-950 min-h-screen;
+    overflow-x: clip;
+    max-width: 100%;
+  }
+
+  h1, h2, h3, h4, h5, h6, .font-heading {
+    font-family: var(--font-heading);
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+
+  code, pre, .font-mono, .id-badge {
+    font-family: var(--font-mono);
+    font-feature-settings: 'tnum' on, 'zero' on;
+  }
+
+  /* Universal accessible keyboard focus ring (WCAG AA) */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+}
+
+.mrs-card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-soft);
+}
+
+.mrs-control {
+  border-radius: var(--radius-control);
+  transition: background-color var(--motion-fast), border-color var(--motion-fast), color var(--motion-fast);
+}
+
+/* Automation circuit-grid background pattern */
+.bg-circuit-dark {
+  background-color: #0B1220;
+  background-image:
+    radial-gradient(circle at 50% 0%, rgba(34, 211, 238, 0.07) 0%, transparent 60%),
+    linear-gradient(rgba(34, 211, 238, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.03) 1px, transparent 1px);
+  background-size: 100% 100%, 40px 40px, 40px 40px;
+}
+
+.bg-circuit-light {
+  background-color: #F6F8FC;
+  background-image:
+    radial-gradient(circle at 50% 0%, rgba(14, 116, 144, 0.06) 0%, transparent 60%),
+    linear-gradient(rgba(14, 116, 144, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(14, 116, 144, 0.04) 1px, transparent 1px);
+  background-size: 100% 100%, 40px 40px, 40px 40px;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(34, 49, 77, 0.7);
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(34, 211, 238, 0.5);
+}
+
+button, a, input, select, textarea {
+  touch-action: manipulation;
+}
+
+/* Reduced motion accessibility compliance */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
