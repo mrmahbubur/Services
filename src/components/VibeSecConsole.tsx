@@ -95,15 +95,26 @@ export const VibeSecConsole: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {audit?.checks.map((check) => {
             const isPass = check.status === 'pass';
+            const isWarn = check.status === 'warn';
             return (
               <div
                 key={check.id}
                 className={`p-4 rounded-xl border flex items-start justify-between gap-3 ${
-                  isPass ? 'bg-[#0D1526]/80 border-slate-800' : 'bg-rose-500/10 border-rose-500/30'
+                  isPass
+                    ? 'bg-[#0D1526]/80 border-slate-800'
+                    : isWarn
+                    ? 'bg-amber-500/10 border-amber-500/30'
+                    : 'bg-rose-500/10 border-rose-500/30'
                 }`}
               >
                 <div className="flex items-start gap-3">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  {isPass ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  ) : isWarn ? (
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  )}
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-xs text-slate-200">{check.name}</span>
@@ -113,7 +124,15 @@ export const VibeSecConsole: React.FC = () => {
                   </div>
                 </div>
 
-                <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 shrink-0 uppercase">
+                <span
+                  className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border shrink-0 uppercase ${
+                    isPass
+                      ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                      : isWarn
+                      ? 'text-amber-300 bg-amber-500/10 border-amber-500/30'
+                      : 'text-rose-300 bg-rose-500/10 border-rose-500/30'
+                  }`}
+                >
                   {check.status}
                 </span>
               </div>
@@ -123,13 +142,40 @@ export const VibeSecConsole: React.FC = () => {
       </div>
 
       {/* Recommendations & Invariants */}
-      <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800 space-y-2 text-xs">
-        <span className="font-semibold text-slate-300 block">VibeSec Runtime Safeguards</span>
-        <ul className="space-y-1 text-slate-400 list-disc list-inside text-[11px]">
-          <li>All incoming webhooks verify `X-Signature` via HMAC-SHA256 with timestamp tolerance window of 300 seconds.</li>
-          <li>PIN authorization enforces strict 15-minute lock after 5 invalid attempts to neutralize brute-force attacks.</li>
-          <li>HTTP response headers include `nosniff`, `SAMEORIGIN`, and strict referrer policy to protect iframe boundaries.</li>
-        </ul>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800 space-y-2 text-xs">
+          <span className="font-semibold text-slate-300 flex items-center gap-2">
+            <Key className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Session Keys & Cookie Policy</span>
+          </span>
+          <ul className="space-y-1.5 text-slate-400 list-disc list-inside text-[11px] leading-relaxed">
+            <li>
+              <strong className="text-slate-300">Ephemeral Signing Keys:</strong> Session tokens are signed in server memory with a fresh 256-bit key (`crypto.randomBytes(32)`) and verified in constant time via HMAC-SHA256—no static `MRS_SESSION_SECRET` required.
+            </li>
+            <li>
+              <strong className="text-slate-300">HTTPS &amp; Partitioned Cookies:</strong> Auth cookies emit `HttpOnly; Secure; SameSite=None; Partitioned` over HTTPS / proxied requests (with `Lax` on local HTTP) and enforce same-origin `Origin` checks on cookie mutations.
+            </li>
+            <li>
+              <strong className="text-slate-300">Owner &amp; Brute-Force Protection:</strong> Admin sign-in and first-run claim validate salted `scrypt` (`N=16384, r=8, p=1`) hashes or `MRS_ADMIN_PASSWORD` with per-IP rate limiting (`10` attempts / 15m) and 5-strike client PIN lockouts.
+            </li>
+          </ul>
+        </div>
+
+        <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800 space-y-2 text-xs">
+          <span className="font-semibold text-slate-300 flex items-center gap-2">
+            <Lock className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Runtime Headers &amp; Audit Notes</span>
+          </span>
+          <ul className="space-y-1.5 text-slate-400 list-disc list-inside text-[11px] leading-relaxed">
+            <li>HTTP headers set `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and `Permissions-Policy` without restrictive `X-Frame-Options` blockers for embedded consoles.</li>
+            <li>Incoming ingestion webhooks verify `X-Signature` via HMAC-SHA256 within a 300-second replay window.</li>
+            {audit?.recommendations?.map((rec, i) => (
+              <li key={i} className="text-cyan-300/90">
+                {rec}
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
     </div>
   );
