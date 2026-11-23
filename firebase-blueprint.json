@@ -343,6 +343,16 @@
         "createdAt": { "type": "string", "maxLength": 64 }
       },
       "required": ["id", "operationType", "error", "createdAt"]
+    },
+    "AdminAuth": {
+      "title": "AdminAuth",
+      "description": "First-run scrypt-hashed administrator passcode record stored under /config/admin_auth",
+      "type": "object",
+      "properties": {
+        "passwordHash": { "type": "string", "maxLength": 256 },
+        "claimedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["passwordHash", "claimedAt"]
     }
   },
   "firestore": {

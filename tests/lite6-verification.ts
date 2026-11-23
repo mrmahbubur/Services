@@ -11,6 +11,7 @@ import { Jimp } from 'jimp';
 import { installMrsCore, MemoryStore } from '../server/mrs-core/index.js';
 import { GENERIC_CLIENT_CORRECTION_MSG } from '../server/mrs-core/payments/aiVerifier.js';
 import { CATALOG_SERVICES } from '../server/mrs-core/orders/catalog.js';
+import { hashPasswordScrypt, verifyPasswordScrypt } from '../server/mrs-core/security/auth.js';
 
 interface AiMockScenario {
   detectedProvider: string;
@@ -659,7 +660,88 @@ async function run() {
     assert.equal(acceptShape.status, 200);
     console.log('  [PASS] 11. Exact-month codes (1/2/6/12m) emailed, hashed, redeemed, & 20+ sample shape regex learned');
 
-    console.log('\nALL 11 LITE 6 VERIFICATION TESTS PASSED (11/11).');
+    // -----------------------------------------------------------------------
+    // TEST 12: Scrypt utilities & initial administrator bootstrap flow
+    // -----------------------------------------------------------------------
+    const scryptHashA = hashPasswordScrypt('OwnerBoot2026!');
+    const scryptHashB = hashPasswordScrypt('OwnerBoot2026!');
+    assert.ok(scryptHashA.startsWith('scrypt$'), 'Scrypt hash must use scrypt$ format');
+    assert.notEqual(scryptHashA, scryptHashB, 'Unique random salts must produce distinct hashes');
+    assert.equal(verifyPasswordScrypt('OwnerBoot2026!', scryptHashA), true, 'Matching password must verify');
+    assert.equal(verifyPasswordScrypt('WrongBoot2026!', scryptHashA), false, 'Wrong password must fail');
+    assert.equal(verifyPasswordScrypt('', scryptHashA), false, 'Empty password must fail');
+    assert.equal(verifyPasswordScrypt('OwnerBoot2026!', 'scrypt$bad$format'), false, 'Malformed hash must fail');
+
+    const prevEnvAdmin = process.env.MRS_ADMIN_PASSWORD;
+    delete process.env.MRS_ADMIN_PASSWORD;
+    const bootApp = express();
+    const bootStore = new MemoryStore();
+    installMrsCore(bootApp, { store: bootStore });
+    const bootSrv = http.createServer(bootApp);
+    await new Promise<void>((r) => bootSrv.listen(0, '127.0.0.1', () => r()));
+    try {
+      const bootPort = (bootSrv.address() as any).port;
+      const bootUrl = `http://127.0.0.1:${bootPort}`;
+      const bootCall = async (method: string, path: string, body?: any, headers?: Record<string, string>) => {
+        const res = await fetch(`${bootUrl}${path}`, {
+          method,
+          headers: { 'Content-Type': 'application/json', ...(headers || {}) },
+          body: body ? JSON.stringify(body) : undefined,
+        });
+        return { status: res.status, data: await res.json().catch(() => ({})) };
+      };
+
+      const stInitial = await bootCall('GET', '/api/admin/bootstrap-status');
+      assert.equal(stInitial.status, 200);
+      assert.equal(stInitial.data.needsClaim, true, 'Fresh instance without env password must require claim');
+      assert.equal(stInitial.data.hasEnvPassword, false);
+
+      const loginUnclaimed = await bootCall('POST', '/api/admin/login', { password: 'anything-here' });
+      assert.equal(loginUnclaimed.status, 403);
+      assert.equal(loginUnclaimed.data.code, 'admin_not_claimed');
+
+      const claimWeak = await bootCall('POST', '/api/admin/bootstrap-claim', { password: 'short' });
+      assert.equal(claimWeak.status, 400);
+
+      const claimMismatch = await bootCall('POST', '/api/admin/bootstrap-claim', {
+        password: 'ValidPass2026!',
+        confirmPassword: 'DifferentPass2026!',
+      });
+      assert.equal(claimMismatch.status, 400);
+
+      const claimValid = await bootCall('POST', '/api/admin/bootstrap-claim', {
+        password: 'ValidPass2026!',
+        confirmPassword: 'ValidPass2026!',
+      });
+      assert.equal(claimValid.status, 201);
+      assert.equal(claimValid.data.success, true);
+      assert.ok(claimValid.data.token, 'Bootstrap claim must issue session token');
+
+      const stAfter = await bootCall('GET', '/api/admin/bootstrap-status');
+      assert.equal(stAfter.data.needsClaim, false, 'Status must reflect claimed state');
+
+      const claimTwice = await bootCall('POST', '/api/admin/bootstrap-claim', { password: 'SecondPass2026!' });
+      assert.equal(claimTwice.status, 403);
+
+      const loginBad = await bootCall('POST', '/api/admin/login', { password: 'WrongPassword!' });
+      assert.equal(loginBad.status, 401);
+
+      const loginOk = await bootCall('POST', '/api/admin/login', { password: 'ValidPass2026!' });
+      assert.equal(loginOk.status, 200);
+      assert.ok(loginOk.data.token);
+
+      const sessionRes = await bootCall('GET', '/api/admin/session', undefined, {
+        Authorization: `Bearer ${loginOk.data.token}`,
+      });
+      assert.equal(sessionRes.status, 200);
+      assert.equal(sessionRes.data.ok, true);
+    } finally {
+      if (prevEnvAdmin !== undefined) process.env.MRS_ADMIN_PASSWORD = prevEnvAdmin;
+      await new Promise<void>((resolve) => bootSrv.close(() => resolve()));
+    }
+    console.log('  [PASS] 12. Scrypt utilities & initial administrator bootstrap status/claim/login');
+
+    console.log('\nALL 12 VERIFICATION TESTS PASSED (12/12).');
   } finally {
     globalThis.fetch = origFetch;
     await new Promise<void>((resolve) => server.close(() => resolve()));

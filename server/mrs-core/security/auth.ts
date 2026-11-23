@@ -17,20 +17,27 @@ export function timingSafeEqualStrings(a: string, b: string): boolean {
   return crypto.timingSafeEqual(hashA, hashB);
 }
 
+const SCRYPT_KEYLEN = 64;
+const SCRYPT_OPTIONS: crypto.ScryptOptions = { N: 16384, r: 8, p: 1 };
+
 export function hashPasswordScrypt(password: string): string {
+  if (typeof password !== 'string' || password.length === 0) {
+    throw new Error('Password must be a non-empty string.');
+  }
   const salt = crypto.randomBytes(16).toString('hex');
-  const derived = crypto.scryptSync(password, salt, 64).toString('hex');
+  const derived = crypto.scryptSync(password, salt, SCRYPT_KEYLEN, SCRYPT_OPTIONS).toString('hex');
   return `scrypt$${salt}$${derived}`;
 }
 
 export function verifyPasswordScrypt(password: string, storedHash: string): boolean {
+  if (typeof password !== 'string' || password.length === 0) return false;
   if (!storedHash || typeof storedHash !== 'string') return false;
   const parts = storedHash.split('$');
   if (parts.length !== 3 || parts[0] !== 'scrypt') return false;
   const [, salt, hexDigest] = parts;
-  if (!salt || !hexDigest) return false;
+  if (!salt || !/^[a-f0-9]{128}$/i.test(hexDigest || '')) return false;
   try {
-    const derived = crypto.scryptSync(password, salt, 64);
+    const derived = crypto.scryptSync(password, salt, SCRYPT_KEYLEN, SCRYPT_OPTIONS);
     const expected = Buffer.from(hexDigest, 'hex');
     if (derived.length !== expected.length) return false;
     return crypto.timingSafeEqual(derived, expected);
@@ -53,7 +60,7 @@ export function verifyToken(token: string): Record<string, any> | null {
   if (parts.length !== 3) return null;
   const [header, body, signature] = parts;
   const expectedSig = crypto.createHmac('sha256', SESSION_SECRET).update(`${header}.${body}`).digest('base64url');
-  if (signature !== expectedSig) return null;
+  if (!timingSafeEqualStrings(signature, expectedSig)) return null;
 
   try {
     const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
@@ -62,6 +69,28 @@ export function verifyToken(token: string): Record<string, any> | null {
   } catch (e) {
     return null;
   }
+}
+
+export function createAttemptLimiter(maxAttempts: number, windowMs: number) {
+  const buckets = new Map<string, { count: number; resetAt: number }>();
+  return {
+    check(key: string): { allowed: boolean; retryAfterSec: number } {
+      const now = Date.now();
+      const entry = buckets.get(key);
+      if (!entry || entry.resetAt <= now) {
+        buckets.set(key, { count: 1, resetAt: now + windowMs });
+        return { allowed: true, retryAfterSec: 0 };
+      }
+      if (entry.count >= maxAttempts) {
+        return { allowed: false, retryAfterSec: Math.max(1, Math.ceil((entry.resetAt - now) / 1000)) };
+      }
+      entry.count += 1;
+      return { allowed: true, retryAfterSec: 0 };
+    },
+    reset(key: string): void {
+      buckets.delete(key);
+    },
+  };
 }
 
 export function extractBearerToken(req: Request, preferredCookie?: 'mrs_session' | 'mrs_admin_session'): string | null {

@@ -18,7 +18,6 @@ export interface VibeSecAuditResult {
 
 export function vibesecHeadersMiddleware(req: Request, res: Response, next: NextFunction) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
@@ -106,7 +105,7 @@ export async function runVibeSecAudit(store?: IStore): Promise<VibeSecAuditResul
       name: 'Secure HTTP Headers',
       category: 'headers',
       status: 'pass',
-      detail: 'X-Content-Type-Options: nosniff, X-Frame-Options: SAMEORIGIN, Referrer-Policy, and Permissions-Policy active.',
+      detail: 'X-Content-Type-Options: nosniff, Referrer-Policy, and Permissions-Policy active.',
     },
     {
       id: 'VIBE-07',

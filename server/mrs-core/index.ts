@@ -32,6 +32,7 @@ import {
   timingSafeEqualStrings,
   hashPasswordScrypt,
   verifyPasswordScrypt,
+  createAttemptLimiter,
   generateToken,
   verifyToken,
   extractBearerToken,
@@ -253,6 +254,9 @@ export function installMrsCore(app: Express, options: MrsCoreOptions = {}) {
     };
   }
 
+  if (typeof app.set === 'function') {
+    app.set('trust proxy', 1);
+  }
   app.use(vibesecHeadersMiddleware);
   app.use(express.json({ limit: '15mb' }));
   app.use(express.urlencoded({ extended: true, limit: '15mb' }));
@@ -265,6 +269,33 @@ export function installMrsCore(app: Express, options: MrsCoreOptions = {}) {
   const SMS_SIGNING_KEY = process.env.MRS_SMS_SIGNING_KEY || crypto.randomBytes(24).toString('hex');
   const INGEST_SECRET = process.env.MRS_INGEST_SECRET || crypto.randomBytes(32).toString('hex');
   const CRON_SECRET = process.env.MRS_CRON_SECRET || INGEST_SECRET;
+  const adminAuthLimiter = createAttemptLimiter(10, 15 * 60 * 1000);
+
+  function isHttpsRequest(req: Request): boolean {
+    const proto = String(req.headers['x-forwarded-proto'] || '').toLowerCase();
+    return Boolean(req.secure || proto.includes('https'));
+  }
+
+  function setSessionCookie(req: Request, res: Response, name: 'mrs_session' | 'mrs_admin_session', token: string) {
+    const https = isHttpsRequest(req);
+    res.cookie(name, token, {
+      httpOnly: true,
+      secure: https,
+      sameSite: https ? 'none' : 'lax',
+      ...(https ? { partitioned: true } : {}),
+      maxAge: 7 * 24 * 3600 * 1000,
+    });
+  }
+
+  function clearSessionCookie(req: Request, res: Response, name: 'mrs_session' | 'mrs_admin_session') {
+    const https = isHttpsRequest(req);
+    res.clearCookie(name, {
+      httpOnly: true,
+      secure: https,
+      sameSite: https ? 'none' : 'lax',
+      ...(https ? { partitioned: true } : {}),
+    });
+  }
 
   async function getAdminAuthStatus() {
     const claimed = await store.get<{ passwordHash?: string; claimedAt?: string }>('config', 'admin_auth');
@@ -1357,12 +1388,7 @@ Respond as JSON with exact keys:
     await store.set('jobs', job.id, job);
 
     const token = generateToken({ clientId: client.clientId, email: client.email, tokenVersion: client.tokenVersion || 1 });
-    res.cookie('mrs_session', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 3600 * 1000,
-    });
+    setSessionCookie(req, res, 'mrs_session', token);
 
     await recordAudit('CREATE_ORDER', client.clientId, `Order ${order.id} placed for ${service.name} ($${priceUSD})`, order.id);
     await logCamelliaActivity('order_registered', 'order', order.id, `Registered ${order.id} for ${service.name} ($${priceUSD})`);
@@ -1421,12 +1447,7 @@ Respond as JSON with exact keys:
     await recordAudit('CLIENT_REGISTERED', client.clientId, `Server Client ID ${client.clientId} created for ${cleanEmail}`, client.clientId);
 
     const token = generateToken({ clientId: client.clientId, email: client.email, tokenVersion: 1 });
-    res.cookie('mrs_session', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 3600 * 1000,
-    });
+    setSessionCookie(req, res, 'mrs_session', token);
 
     return res.status(201).json({
       success: true,
@@ -1475,12 +1496,7 @@ Respond as JSON with exact keys:
 
     await store.update('clients', client.clientId, { loginFailures: 0, lockedUntil: undefined });
     const token = generateToken({ clientId: client.clientId, email: client.email, tokenVersion: client.tokenVersion || 1 });
-    res.cookie('mrs_session', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 3600 * 1000,
-    });
+    setSessionCookie(req, res, 'mrs_session', token);
 
     return res.json({
       token,
@@ -1515,12 +1531,7 @@ Respond as JSON with exact keys:
       tokenVersion: nextVersion,
     });
     const freshToken = generateToken({ clientId: client.clientId, email: client.email, tokenVersion: nextVersion });
-    res.cookie('mrs_session', freshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 3600 * 1000,
-    });
+    setSessionCookie(req, res, 'mrs_session', freshToken);
     await recordAudit('CLIENT_CHANGE_PIN', client.clientId, `Client ${client.clientId} rotated PIN on server`, client.clientId);
     return res.json({ success: true, token: freshToken, message: 'PIN updated and persisted on server.' });
   });
@@ -1532,12 +1543,12 @@ Respond as JSON with exact keys:
       await store.update('clients', client.clientId, { tokenVersion: (client.tokenVersion || 1) + 1 });
       await recordAudit('CLIENT_LOGOUT_ALL', client.clientId, `Revoked all active sessions for ${client.clientId}`, client.clientId);
     }
-    res.clearCookie('mrs_session');
+    clearSessionCookie(req, res, 'mrs_session');
     return res.json({ success: true, message: 'All device sessions revoked on server.' });
   });
 
-  app.post('/api/portal/logout', (_req: Request, res: Response) => {
-    res.clearCookie('mrs_session');
+  app.post('/api/portal/logout', (req: Request, res: Response) => {
+    clearSessionCookie(req, res, 'mrs_session');
     return res.json({ success: true, message: 'Signed out' });
   });
 
@@ -2386,6 +2397,17 @@ Reply concisely and helpfully.`;
   });
 
   app.post('/api/admin/bootstrap-claim', async (req: Request, res: Response) => {
+    const rateKey = `admin-claim:${req.ip || 'unknown'}`;
+    const rate = adminAuthLimiter.check(rateKey);
+    if (!rate.allowed) {
+      res.setHeader('Retry-After', String(rate.retryAfterSec));
+      return res.status(429).json({
+        success: false,
+        error: 'Too many setup attempts. Please wait and try again.',
+        code: 'rate_limited',
+      });
+    }
+
     const status = await getAdminAuthStatus();
     if (!status.needsClaim) {
       return res.status(403).json({
@@ -2395,37 +2417,45 @@ Reply concisely and helpfully.`;
       });
     }
     const { password, confirmPassword } = req.body || {};
-    if (typeof password !== 'string' || password.trim().length < 8) {
+    const cleanPassword = typeof password === 'string' ? password.trim() : '';
+    if (cleanPassword.length < 8) {
       return res.status(400).json({
         success: false,
         error: 'Passcode must be at least 8 characters.',
         code: 'weak_password',
       });
     }
-    if (typeof confirmPassword === 'string' && password !== confirmPassword) {
+    if (typeof confirmPassword === 'string' && cleanPassword !== confirmPassword.trim()) {
       return res.status(400).json({
         success: false,
         error: 'Passcodes do not match.',
         code: 'password_mismatch',
       });
     }
-    const passwordHash = hashPasswordScrypt(password.trim());
+    const passwordHash = hashPasswordScrypt(cleanPassword);
     await store.set('config', 'admin_auth', {
       passwordHash,
       claimedAt: new Date().toISOString(),
     });
+    adminAuthLimiter.reset(rateKey);
     const token = generateToken({ isAdmin: true, email: OWNER_EMAIL });
-    res.cookie('mrs_admin_session', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 3600 * 1000,
-    });
+    setSessionCookie(req, res, 'mrs_admin_session', token);
     await recordAudit('ADMIN_PASSCODE_CLAIMED', OWNER_EMAIL, 'Initial owner passcode configured via first-run setup');
     return res.status(201).json({ success: true, token, email: OWNER_EMAIL });
   });
 
   app.post('/api/admin/login', async (req: Request, res: Response) => {
+    const rateKey = `admin-login:${req.ip || 'unknown'}`;
+    const rate = adminAuthLimiter.check(rateKey);
+    if (!rate.allowed) {
+      res.setHeader('Retry-After', String(rate.retryAfterSec));
+      return res.status(429).json({
+        success: false,
+        error: 'Too many sign-in attempts. Please try again later.',
+        code: 'rate_limited',
+      });
+    }
+
     const { password } = req.body || {};
     const status = await getAdminAuthStatus();
     if (status.needsClaim) {
@@ -2435,7 +2465,7 @@ Reply concisely and helpfully.`;
         code: 'admin_not_claimed',
       });
     }
-    const passStr = typeof password === 'string' ? password : '';
+    const passStr = typeof password === 'string' ? password.trim() : '';
     const isValid = status.hasEnvPassword
       ? Boolean(passStr) && timingSafeEqualStrings(passStr, ENV_ADMIN_PASSWORD)
       : Boolean(passStr) && verifyPasswordScrypt(passStr, status.claimedHash);
@@ -2444,13 +2474,9 @@ Reply concisely and helpfully.`;
       await recordAudit('ADMIN_LOGIN_FAILED', 'unknown', 'Invalid admin password attempted');
       return res.status(401).json({ success: false, error: 'Invalid password', code: 'bad_login' });
     }
+    adminAuthLimiter.reset(rateKey);
     const token = generateToken({ isAdmin: true, email: OWNER_EMAIL });
-    res.cookie('mrs_admin_session', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 3600 * 1000,
-    });
+    setSessionCookie(req, res, 'mrs_admin_session', token);
     await recordAudit('ADMIN_LOGIN_SUCCESS', OWNER_EMAIL, 'Owner signed in');
     return res.json({ success: true, token, email: OWNER_EMAIL });
   });
@@ -2459,8 +2485,8 @@ Reply concisely and helpfully.`;
     return res.json({ ok: true, email: OWNER_EMAIL });
   });
 
-  app.post('/api/admin/logout', (_req: Request, res: Response) => {
-    res.clearCookie('mrs_admin_session');
+  app.post('/api/admin/logout', (req: Request, res: Response) => {
+    clearSessionCookie(req, res, 'mrs_admin_session');
     return res.json({ success: true, message: 'Signed out' });
   });
 
