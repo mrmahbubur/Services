@@ -34,10 +34,11 @@ export function sanitizeInputString(input: string): string {
     .replace(/onload\s*=/gi, '');
 }
 
-export function runVibeSecAudit(store?: IStore): VibeSecAuditResult {
+export async function runVibeSecAudit(store?: IStore): Promise<VibeSecAuditResult> {
   const isDurable = store ? store.isDurable() : false;
   const isCloud = store && typeof store.isCloudConnected === 'function' ? store.isCloudConnected() : isDurable;
-  const hasCustomAdminPassword = Boolean(process.env.MRS_ADMIN_PASSWORD && process.env.MRS_ADMIN_PASSWORD !== 'mrs-admin-secure-2026');
+  const claimedAdmin = store ? await store.get<{ passwordHash?: string }>('config', 'admin_auth') : null;
+  const hasCustomAdminPassword = Boolean(process.env.MRS_ADMIN_PASSWORD || claimedAdmin?.passwordHash);
   const hasCustomSessionSecret = Boolean(process.env.MRS_SESSION_SECRET && process.env.MRS_SESSION_SECRET.length >= 32);
   const hasSmsKey = Boolean(process.env.MRS_SMS_SIGNING_KEY);
   const hasIngestKey = Boolean(process.env.MRS_INGEST_SECRET);
@@ -79,8 +80,10 @@ export function runVibeSecAudit(store?: IStore): VibeSecAuditResult {
       category: 'authentication',
       status: hasCustomAdminPassword && hasCustomSessionSecret ? 'pass' : 'warn',
       detail: hasCustomAdminPassword && hasCustomSessionSecret
-        ? 'Production MRS_ADMIN_PASSWORD and 32+ char MRS_SESSION_SECRET configured; 5-strike PIN lockout active.'
-        : 'Using default development credentials; configure MRS_ADMIN_PASSWORD and MRS_SESSION_SECRET before production launch.',
+        ? 'Owner passcode and 32+ char MRS_SESSION_SECRET configured; 5-strike PIN lockout active.'
+        : !hasCustomAdminPassword
+        ? 'Owner passcode not yet claimed or set in MRS_ADMIN_PASSWORD; complete first-run setup or configure Secrets.'
+        : 'Owner passcode configured; configure 32+ char MRS_SESSION_SECRET in Secrets to persist sessions across restarts.',
     },
     {
       id: 'VIBE-04',

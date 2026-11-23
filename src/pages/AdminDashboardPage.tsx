@@ -52,6 +52,7 @@ export const AdminDashboardPage: React.FC = () => {
   const {
     isAdmin,
     loginAdmin,
+    claimAdmin,
     logoutAdmin,
     allOrders,
     allPayments,
@@ -83,8 +84,33 @@ export const AdminDashboardPage: React.FC = () => {
   } = useApp();
   const isDark = theme === 'dark';
 
-  // Admin login form
+  // Admin login & first-run claim form
   const [adminPass, setAdminPass] = useState('');
+  const [confirmAdminPass, setConfirmAdminPass] = useState('');
+  const [needsAdminClaim, setNeedsAdminClaim] = useState(false);
+  const [checkingBootstrap, setCheckingBootstrap] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    if (isAdmin) {
+      setCheckingBootstrap(false);
+      return;
+    }
+    fetch('/api/admin/bootstrap-status')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (active && data) {
+          setNeedsAdminClaim(Boolean(data.needsClaim));
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setCheckingBootstrap(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [isAdmin]);
 
   // Active admin tab
   const [adminTab, setAdminTab] = useState<
@@ -197,9 +223,18 @@ export const AdminDashboardPage: React.FC = () => {
   const pendingPaymentsCount = allPayments.filter((p) => p.status === 'Payment submitted').length;
   const activeOrdersCount = allOrders.filter((o) => o.status !== 'Delivered' && o.status !== 'Rejected').length;
 
-  const handleAdminLogin = (e: React.FormEvent) => {
+  const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    loginAdmin(adminPass);
+    if (needsAdminClaim) {
+      const ok = await claimAdmin(adminPass, confirmAdminPass);
+      if (ok) {
+        setNeedsAdminClaim(false);
+        setAdminPass('');
+        setConfirmAdminPass('');
+      }
+      return;
+    }
+    await loginAdmin(adminPass);
     setAdminPass('');
   };
 
@@ -298,7 +333,7 @@ export const AdminDashboardPage: React.FC = () => {
     showToast('Reply Sent', `Message saved on order ${targetOrderId}`, 'success');
   };
 
-  // IF NOT ADMIN: Show Owner Login Gate
+  // IF NOT ADMIN: Show Owner Login or First-Run Setup Gate
   if (!isAdmin) {
     return (
       <div className={`min-h-[80vh] flex flex-col items-center justify-center px-4 py-12 ${isDark ? 'text-[#E6EDF7]' : 'text-[#0B1220]'}`}>
@@ -312,42 +347,77 @@ export const AdminDashboardPage: React.FC = () => {
               <ShieldAlert className="w-6 h-6" />
             </div>
             <h2 className="font-heading font-extrabold text-2xl tracking-tight">
-              Executive Owner Console
+              {needsAdminClaim ? 'Configure Owner Passcode' : 'Executive Owner Console'}
             </h2>
             <p className="text-xs text-slate-400">
-              Restricted to authorized owner email: <strong>mr216873@gmail.com</strong>
+              {needsAdminClaim
+                ? 'First-run security setup for authorized owner mr216873@gmail.com. Set an 8+ character passcode or configure MRS_ADMIN_PASSWORD in Secrets.'
+                : (
+                  <>
+                    Restricted to authorized owner email: <strong>mr216873@gmail.com</strong>
+                  </>
+                )}
             </p>
           </div>
 
-          <form onSubmit={handleAdminLogin} className="space-y-4 text-xs">
-            <div>
-              <label className="block text-slate-400 font-medium mb-1">
-                Owner Security Key / Password
-              </label>
-              <div className="relative">
-                <Lock className="w-4 h-4 absolute left-3 top-3 text-slate-500" />
-                <input
-                  type="password"
-                  required
-                  value={adminPass}
-                  onChange={(e) => setAdminPass(e.target.value)}
-                  placeholder="Enter owner authorization key"
-                  className={`w-full rounded-xl pl-9 pr-3 py-2.5 font-mono text-sm border focus:outline-none focus:ring-1 focus:ring-cyan-500 ${
-                    isDark ? 'bg-[#16233B] border-[#22314D] text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
-                  }`}
-                  autoFocus
-                />
-              </div>
+          {checkingBootstrap ? (
+            <div className="py-6 text-center text-xs text-slate-400">
+              Checking owner authorization status...
             </div>
+          ) : (
+            <form onSubmit={handleAdminLogin} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-slate-400 font-medium mb-1">
+                  {needsAdminClaim ? 'New Owner Passcode (min 8 chars)' : 'Owner Security Key / Password'}
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 absolute left-3 top-3 text-slate-500" />
+                  <input
+                    type="password"
+                    required
+                    minLength={needsAdminClaim ? 8 : undefined}
+                    value={adminPass}
+                    onChange={(e) => setAdminPass(e.target.value)}
+                    placeholder={needsAdminClaim ? 'Choose a strong owner passcode' : 'Enter owner authorization key'}
+                    className={`w-full rounded-xl pl-9 pr-3 py-2.5 font-mono text-sm border focus:outline-none focus:ring-1 focus:ring-cyan-500 ${
+                      isDark ? 'bg-[#16233B] border-[#22314D] text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
+                    }`}
+                    autoFocus
+                  />
+                </div>
+              </div>
 
-            <button
-              type="submit"
-              className="w-full py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-heading font-bold text-xs flex items-center justify-center gap-2 transition-colors shadow-md"
-            >
-              <ShieldAlert className="w-4 h-4" />
-              <span>Authorize Executive Access</span>
-            </button>
-          </form>
+              {needsAdminClaim && (
+                <div>
+                  <label className="block text-slate-400 font-medium mb-1">
+                    Confirm Owner Passcode
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 absolute left-3 top-3 text-slate-500" />
+                    <input
+                      type="password"
+                      required
+                      minLength={8}
+                      value={confirmAdminPass}
+                      onChange={(e) => setConfirmAdminPass(e.target.value)}
+                      placeholder="Re-enter owner passcode"
+                      className={`w-full rounded-xl pl-9 pr-3 py-2.5 font-mono text-sm border focus:outline-none focus:ring-1 focus:ring-cyan-500 ${
+                        isDark ? 'bg-[#16233B] border-[#22314D] text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
+                      }`}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="w-full py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-heading font-bold text-xs flex items-center justify-center gap-2 transition-colors shadow-md"
+              >
+                <ShieldAlert className="w-4 h-4" />
+                <span>{needsAdminClaim ? 'Save Passcode & Unlock Console' : 'Authorize Executive Access'}</span>
+              </button>
+            </form>
+          )}
 
         </div>
       </div>

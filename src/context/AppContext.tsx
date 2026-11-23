@@ -118,6 +118,7 @@ interface AppContextType {
   // Admin access & operations
   isAdmin: boolean;
   loginAdmin: (pass: string) => Promise<boolean>;
+  claimAdmin: (pass: string, confirmPass: string) => Promise<boolean>;
   logoutAdmin: () => Promise<void>;
   refreshAdminData: () => Promise<void>;
   allOrders: OrderRecord[];
@@ -1430,6 +1431,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const claimAdmin = async (pass: string, confirmPass: string) => {
+    try {
+      const res = await fetch('/api/admin/bootstrap-claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pass, confirmPassword: confirmPass }),
+      });
+      if (res.ok) {
+        setIsAdmin(true);
+        await refreshAdminData();
+        showToast('Owner Passcode Configured', 'Your executive passcode has been saved securely and operations are unlocked.', 'success');
+        return true;
+      }
+      const err = await res.json().catch(() => ({}));
+      showToast('Setup Failed', err.error || 'Could not configure owner passcode.', 'error');
+      return false;
+    } catch (e: any) {
+      showToast('Connection Error', e.message, 'error');
+      return false;
+    }
+  };
+
   const logoutAdmin = async () => {
     try {
       await fetch('/api/admin/logout', { method: 'POST' });
@@ -1567,6 +1590,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         reportProblem,
         isAdmin,
         loginAdmin,
+        claimAdmin,
         logoutAdmin,
         refreshAdminData,
         allOrders,

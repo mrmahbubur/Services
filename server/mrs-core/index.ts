@@ -29,6 +29,9 @@ import { parseOperatorSms, parsePaymentEmail } from './payments/readers.js';
 import { processOrderJob } from './fulfilment/engine.js';
 import {
   hashPin,
+  timingSafeEqualStrings,
+  hashPasswordScrypt,
+  verifyPasswordScrypt,
   generateToken,
   verifyToken,
   extractBearerToken,
@@ -258,10 +261,22 @@ export function installMrsCore(app: Express, options: MrsCoreOptions = {}) {
 
   const GEMINI_MODEL = resolveGeminiModel();
   const OWNER_EMAIL = process.env.OWNER_EMAIL || 'mr216873@gmail.com';
-  const ADMIN_PASSWORD = process.env.MRS_ADMIN_PASSWORD || 'mrs-admin-secure-2026';
+  const ENV_ADMIN_PASSWORD = process.env.MRS_ADMIN_PASSWORD?.trim() || '';
   const SMS_SIGNING_KEY = process.env.MRS_SMS_SIGNING_KEY || crypto.randomBytes(24).toString('hex');
   const INGEST_SECRET = process.env.MRS_INGEST_SECRET || crypto.randomBytes(32).toString('hex');
   const CRON_SECRET = process.env.MRS_CRON_SECRET || INGEST_SECRET;
+
+  async function getAdminAuthStatus() {
+    const claimed = await store.get<{ passwordHash?: string; claimedAt?: string }>('config', 'admin_auth');
+    const hasClaimed = Boolean(claimed?.passwordHash);
+    const hasEnv = Boolean(ENV_ADMIN_PASSWORD);
+    return {
+      needsClaim: !hasEnv && !hasClaimed,
+      hasEnvPassword: hasEnv,
+      hasClaimedPassword: hasClaimed,
+      claimedHash: claimed?.passwordHash || '',
+    };
+  }
 
   // Store helpers for persisted configuration & operations
   async function getSettings(): Promise<SystemSettings> {
@@ -2361,9 +2376,71 @@ Reply concisely and helpfully.`;
   // ADMIN AUTH & EXECUTIVE OVERVIEW
   // ===========================================================================
 
+  app.get('/api/admin/bootstrap-status', async (_req: Request, res: Response) => {
+    const status = await getAdminAuthStatus();
+    return res.json({
+      needsClaim: status.needsClaim,
+      hasEnvPassword: status.hasEnvPassword,
+      email: OWNER_EMAIL,
+    });
+  });
+
+  app.post('/api/admin/bootstrap-claim', async (req: Request, res: Response) => {
+    const status = await getAdminAuthStatus();
+    if (!status.needsClaim) {
+      return res.status(403).json({
+        success: false,
+        error: 'Owner passcode is already configured. Please sign in.',
+        code: 'already_claimed',
+      });
+    }
+    const { password, confirmPassword } = req.body || {};
+    if (typeof password !== 'string' || password.trim().length < 8) {
+      return res.status(400).json({
+        success: false,
+        error: 'Passcode must be at least 8 characters.',
+        code: 'weak_password',
+      });
+    }
+    if (typeof confirmPassword === 'string' && password !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'Passcodes do not match.',
+        code: 'password_mismatch',
+      });
+    }
+    const passwordHash = hashPasswordScrypt(password.trim());
+    await store.set('config', 'admin_auth', {
+      passwordHash,
+      claimedAt: new Date().toISOString(),
+    });
+    const token = generateToken({ isAdmin: true, email: OWNER_EMAIL });
+    res.cookie('mrs_admin_session', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 3600 * 1000,
+    });
+    await recordAudit('ADMIN_PASSCODE_CLAIMED', OWNER_EMAIL, 'Initial owner passcode configured via first-run setup');
+    return res.status(201).json({ success: true, token, email: OWNER_EMAIL });
+  });
+
   app.post('/api/admin/login', async (req: Request, res: Response) => {
     const { password } = req.body || {};
-    if (!password || password !== ADMIN_PASSWORD) {
+    const status = await getAdminAuthStatus();
+    if (status.needsClaim) {
+      return res.status(403).json({
+        success: false,
+        error: 'Initial owner passcode has not been configured yet.',
+        code: 'admin_not_claimed',
+      });
+    }
+    const passStr = typeof password === 'string' ? password : '';
+    const isValid = status.hasEnvPassword
+      ? Boolean(passStr) && timingSafeEqualStrings(passStr, ENV_ADMIN_PASSWORD)
+      : Boolean(passStr) && verifyPasswordScrypt(passStr, status.claimedHash);
+
+    if (!isValid) {
       await recordAudit('ADMIN_LOGIN_FAILED', 'unknown', 'Invalid admin password attempted');
       return res.status(401).json({ success: false, error: 'Invalid password', code: 'bad_login' });
     }
@@ -2397,15 +2474,16 @@ Reply concisely and helpfully.`;
       store.list<AlertEntry>('alerts'),
     ]);
     const bridges = await getBridges();
+    const adminStatus = await getAdminAuthStatus();
 
     const configProblems: string[] = [];
     if (!store.isDurable()) configProblems.push('Database is running in non-durable MemoryStore (configure FIREBASE_SERVICE_ACCOUNT).');
     if (!ai) configProblems.push('GEMINI_API_KEY is not configured — AI drafting and Camellia Concierge are disabled.');
-    if (!process.env.MRS_ADMIN_PASSWORD || process.env.MRS_ADMIN_PASSWORD === 'mrs-admin-secure-2026') {
-      configProblems.push('MRS_ADMIN_PASSWORD is still using default dev value.');
+    if (adminStatus.needsClaim) {
+      configProblems.push('Owner passcode has not been configured yet.');
     }
     if (!process.env.MRS_SESSION_SECRET) {
-      configProblems.push('MRS_SESSION_SECRET is not set — using fallback signing key.');
+      configProblems.push('MRS_SESSION_SECRET is not set — using runtime-generated signing key.');
     }
 
     return res.json({
@@ -3737,8 +3815,8 @@ Return valid JSON:
   // ADMIN SECURITY / INFRASTRUCTURE / AUTONOMOUS OPS / CAMELLIA DESK / GMAIL
   // ===========================================================================
 
-  app.get('/api/admin/vibesec/audit', adminAuth, (_req: Request, res: Response) => {
-    return res.json(runVibeSecAudit(store));
+  app.get('/api/admin/vibesec/audit', adminAuth, async (_req: Request, res: Response) => {
+    return res.json(await runVibeSecAudit(store));
   });
 
   app.post('/api/admin/playwright-mcp/run', adminAuth, async (_req: Request, res: Response) => {
