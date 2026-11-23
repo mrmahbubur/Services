@@ -143,16 +143,23 @@ export const PlaywrightMcpConsole: React.FC = () => {
           <div className="space-y-2">
             {report.steps.map((step) => {
               const isPass = step.status === 'passed';
+              const isSkipped = step.status === 'skipped';
               return (
                 <div
                   key={step.stepId}
                   className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                    isPass ? 'bg-[#0D1526]/80 border-slate-800' : 'bg-rose-500/10 border-rose-500/30'
+                    isPass
+                      ? 'bg-[#0D1526]/80 border-slate-800'
+                      : isSkipped
+                      ? 'bg-amber-500/10 border-amber-500/30'
+                      : 'bg-rose-500/10 border-rose-500/30'
                   }`}
                 >
                   <div className="flex items-start gap-3">
                     {isPass ? (
                       <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    ) : isSkipped ? (
+                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                     ) : (
                       <XCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                     )}
@@ -173,6 +180,8 @@ export const PlaywrightMcpConsole: React.FC = () => {
                       className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border uppercase ${
                         isPass
                           ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                          : isSkipped
+                          ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
                           : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
                       }`}
                     >

@@ -6,10 +6,8 @@ import {
   Key,
   CheckCircle2,
   AlertTriangle,
+  XCircle,
   RefreshCw,
-  Server,
-  Fingerprint,
-  FileCheck,
 } from 'lucide-react';
 
 interface VibeSecAuditResult {
@@ -49,6 +47,28 @@ export const VibeSecConsole: React.FC = () => {
     fetchAudit();
   }, []);
 
+  const passCount = audit?.checks.filter((c) => c.status === 'pass').length ?? 0;
+  const warnCount = audit?.checks.filter((c) => c.status === 'warn').length ?? 0;
+  const failCount = audit?.checks.filter((c) => c.status === 'fail').length ?? 0;
+
+  const gradeBadgeStyle =
+    !audit
+      ? 'bg-slate-800 text-slate-300 border-slate-700'
+      : audit.grade === 'A+' || audit.grade === 'A'
+      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+      : audit.grade === 'B' || audit.grade === 'C'
+      ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+      : 'bg-rose-500/15 text-rose-300 border-rose-500/30';
+
+  const scoreTextStyle =
+    !audit
+      ? 'text-slate-400'
+      : audit.score >= 85
+      ? 'text-cyan-400'
+      : audit.score >= 65
+      ? 'text-amber-400'
+      : 'text-rose-400';
+
   return (
     <div className="space-y-6">
       {/* Top Banner with Score */}
@@ -58,10 +78,10 @@ export const VibeSecConsole: React.FC = () => {
             <ShieldCheck className="w-6 h-6" />
           </div>
           <div>
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 flex-wrap">
               <h3 className="font-heading font-bold text-lg text-white">VibeSec Cryptographic & Runtime Hardening</h3>
-              <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                Grade: {audit?.grade || 'A+'}
+              <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded border ${gradeBadgeStyle}`}>
+                Grade: {audit?.grade || '...'}
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-1">
@@ -73,7 +93,9 @@ export const VibeSecConsole: React.FC = () => {
         <div className="flex items-center gap-4 self-start md:self-auto shrink-0">
           <div className="text-right">
             <span className="text-[10px] font-mono text-slate-500 block uppercase">VibeSec Posture Score</span>
-            <span className="font-heading font-black text-2xl text-cyan-400">{audit?.score || 100} / 100</span>
+            <span className={`font-heading font-black text-2xl ${scoreTextStyle}`}>
+              {audit ? `${audit.score} / 100` : '-- / 100'}
+            </span>
           </div>
           <button
             onClick={fetchAudit}
@@ -88,9 +110,24 @@ export const VibeSecConsole: React.FC = () => {
 
       {/* Itemized Audit Checks */}
       <div className="space-y-3">
-        <span className="text-xs font-mono uppercase tracking-wider text-slate-400 font-bold block">
-          Live Security Posture Checks ({audit?.checks.length || 0})
-        </span>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs font-mono uppercase tracking-wider text-slate-400 font-bold">
+            Live Security Posture Checks ({audit?.checks.length || 0})
+          </span>
+          {audit && (
+            <div className="flex items-center gap-2 text-[11px] font-mono">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                <CheckCircle2 className="w-3 h-3" /> {passCount} Pass
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                <AlertTriangle className="w-3 h-3" /> {warnCount} Warn
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/20">
+                <XCircle className="w-3 h-3" /> {failCount} Fail
+              </span>
+            </div>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {audit?.checks.map((check) => {
@@ -113,7 +150,7 @@ export const VibeSecConsole: React.FC = () => {
                   ) : isWarn ? (
                     <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                   ) : (
-                    <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <XCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                   )}
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
@@ -125,7 +162,7 @@ export const VibeSecConsole: React.FC = () => {
                 </div>
 
                 <span
-                  className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border shrink-0 uppercase ${
+                  className={`inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded border shrink-0 uppercase ${
                     isPass
                       ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
                       : isWarn
@@ -133,7 +170,14 @@ export const VibeSecConsole: React.FC = () => {
                       : 'text-rose-300 bg-rose-500/10 border-rose-500/30'
                   }`}
                 >
-                  {check.status}
+                  {isPass ? (
+                    <CheckCircle2 className="w-3 h-3" />
+                  ) : isWarn ? (
+                    <AlertTriangle className="w-3 h-3" />
+                  ) : (
+                    <ShieldAlert className="w-3 h-3" />
+                  )}
+                  <span>{check.status}</span>
                 </span>
               </div>
             );

@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   Circle,
   ShieldCheck,
+  AlertTriangle,
   RefreshCw,
   ChevronRight,
   Info,
@@ -155,7 +156,10 @@ export const GoLiveGate: React.FC = () => {
                   c.ok ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-300' : 'border-amber-500/30 bg-amber-500/5 text-amber-300'
                 }`}
               >
-                <div className="font-bold uppercase">{c.id}: {c.ok ? 'PASS' : 'PENDING'}</div>
+                <div className="font-bold uppercase flex items-center gap-1.5">
+                  {c.ok ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> : <AlertTriangle className="w-3.5 h-3.5 shrink-0" />}
+                  <span>{c.id}: {c.ok ? 'PASS' : 'WARN / PENDING'}</span>
+                </div>
                 <div className="text-slate-400 text-[10px] mt-0.5">{c.detail}</div>
               </div>
             ))}
