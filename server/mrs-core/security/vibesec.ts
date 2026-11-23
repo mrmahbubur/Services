@@ -38,7 +38,6 @@ export async function runVibeSecAudit(store?: IStore): Promise<VibeSecAuditResul
   const isCloud = store && typeof store.isCloudConnected === 'function' ? store.isCloudConnected() : isDurable;
   const claimedAdmin = store ? await store.get<{ passwordHash?: string }>('config', 'admin_auth') : null;
   const hasCustomAdminPassword = Boolean(process.env.MRS_ADMIN_PASSWORD || claimedAdmin?.passwordHash);
-  const hasCustomSessionSecret = Boolean(process.env.MRS_SESSION_SECRET && process.env.MRS_SESSION_SECRET.length >= 32);
   const hasSmsKey = Boolean(process.env.MRS_SMS_SIGNING_KEY);
   const hasIngestKey = Boolean(process.env.MRS_INGEST_SECRET);
 
@@ -75,14 +74,12 @@ export async function runVibeSecAudit(store?: IStore): Promise<VibeSecAuditResul
     },
     {
       id: 'VIBE-03',
-      name: 'Owner Auth & Session Signing Secret',
+      name: 'Owner Auth & Ephemeral Session Signing',
       category: 'authentication',
-      status: hasCustomAdminPassword && hasCustomSessionSecret ? 'pass' : 'warn',
-      detail: hasCustomAdminPassword && hasCustomSessionSecret
-        ? 'Owner passcode and 32+ char MRS_SESSION_SECRET configured; 5-strike PIN lockout active.'
-        : !hasCustomAdminPassword
-        ? 'Owner passcode not yet claimed or set in MRS_ADMIN_PASSWORD; complete first-run setup or configure Secrets.'
-        : 'Owner passcode configured; configure 32+ char MRS_SESSION_SECRET in Secrets to persist sessions across restarts.',
+      status: hasCustomAdminPassword ? 'pass' : 'warn',
+      detail: hasCustomAdminPassword
+        ? 'Owner passcode configured with scrypt/constant-time verification and runtime HMAC-SHA256 session keys; rate limiting and 5-strike PIN lockout active.'
+        : 'Owner passcode not yet claimed or set in MRS_ADMIN_PASSWORD; complete first-run setup or configure Secrets.',
     },
     {
       id: 'VIBE-04',
@@ -125,8 +122,8 @@ export async function runVibeSecAudit(store?: IStore): Promise<VibeSecAuditResul
 
   const recommendations: string[] = [];
   if (!isDurable) recommendations.push('Configure FIREBASE_SERVICE_ACCOUNT for durable Firestore persistence.');
-  if (!hasCustomAdminPassword || !hasCustomSessionSecret) {
-    recommendations.push('Set custom MRS_ADMIN_PASSWORD and 32+ character MRS_SESSION_SECRET environment variables.');
+  if (!hasCustomAdminPassword) {
+    recommendations.push('Set MRS_ADMIN_PASSWORD in Secrets or claim the initial owner passcode via first-run setup.');
   }
   if (!hasSmsKey || !hasIngestKey) {
     recommendations.push('Set production MRS_SMS_SIGNING_KEY and MRS_INGEST_SECRET environment variables.');

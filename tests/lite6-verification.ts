@@ -726,20 +726,62 @@ async function run() {
       const loginBad = await bootCall('POST', '/api/admin/login', { password: 'WrongPassword!' });
       assert.equal(loginBad.status, 401);
 
-      const loginOk = await bootCall('POST', '/api/admin/login', { password: 'ValidPass2026!' });
-      assert.equal(loginOk.status, 200);
-      assert.ok(loginOk.data.token);
+      const httpsLoginRes = await fetch(`${bootUrl}/api/admin/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Forwarded-Proto': 'https',
+        },
+        body: JSON.stringify({ password: 'ValidPass2026!' }),
+      });
+      assert.equal(httpsLoginRes.status, 200);
+      const setCookie = httpsLoginRes.headers.get('set-cookie') || '';
+      assert.ok(setCookie.includes('HttpOnly'), 'Cookie must be HttpOnly');
+      assert.ok(setCookie.includes('Secure'), 'HTTPS forwarded cookie must be Secure');
+      assert.ok(setCookie.includes('SameSite=None'), 'HTTPS forwarded cookie must use SameSite=None');
+      assert.ok(setCookie.includes('Partitioned'), 'HTTPS forwarded cookie must include Partitioned');
+      assert.equal(httpsLoginRes.headers.get('x-frame-options'), null, 'Restrictive X-Frame-Options header must not be emitted');
+
+      const loginOkBody = await httpsLoginRes.json();
+      assert.ok(loginOkBody.token);
 
       const sessionRes = await bootCall('GET', '/api/admin/session', undefined, {
-        Authorization: `Bearer ${loginOk.data.token}`,
+        Authorization: `Bearer ${loginOkBody.token}`,
       });
       assert.equal(sessionRes.status, 200);
       assert.equal(sessionRes.data.ok, true);
+
+      const cookiePair = setCookie.split(';')[0];
+      const crossOriginRes = await fetch(`${bootUrl}/api/admin/settings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: cookiePair,
+          Origin: 'https://evil-attacker.example',
+        },
+        body: JSON.stringify({ exchangeRate: 120 }),
+      });
+      assert.equal(crossOriginRes.status, 403, 'Cross-origin cookie mutation must be blocked');
+
+      // Brute-force protection: 11th consecutive failed attempt returns 429
+      let rateLimitedStatus = 0;
+      let retryAfterHeader: string | null = null;
+      for (let attempt = 0; attempt < 11; attempt++) {
+        const resAttempt = await fetch(`${bootUrl}/api/admin/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: `WrongPass-${attempt}` }),
+        });
+        rateLimitedStatus = resAttempt.status;
+        retryAfterHeader = resAttempt.headers.get('retry-after');
+      }
+      assert.equal(rateLimitedStatus, 429, 'Repeated failed admin logins must trigger 429 rate limit');
+      assert.ok(Number(retryAfterHeader) > 0, '429 response must include Retry-After header');
     } finally {
       if (prevEnvAdmin !== undefined) process.env.MRS_ADMIN_PASSWORD = prevEnvAdmin;
       await new Promise<void>((resolve) => bootSrv.close(() => resolve()));
     }
-    console.log('  [PASS] 12. Scrypt utilities & initial administrator bootstrap status/claim/login');
+    console.log('  [PASS] 12. Scrypt bootstrap, HTTPS/Partitioned cookies, CSRF origin guard, & 429 brute-force limiter');
 
     console.log('\nALL 12 VERIFICATION TESTS PASSED (12/12).');
   } finally {

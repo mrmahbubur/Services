@@ -25,7 +25,7 @@ export const INITIAL_GO_LIVE_CHECKS: GoLiveCheckItem[] = [
   { id: 'GL-02', category: 'payments', title: 'Payment Accounts Verified & Tested', description: 'bKash, Nagad, Payoneer, Skrill verified with real test transfers.', verified: false },
   { id: 'GL-03', category: 'payments', title: 'Payment Auto-Verify Limits & Kill Switch Tested', description: 'Auto-verify ceiling set to safe $50 USD; emergency kill switch verified.', verified: false },
   { id: 'GL-04', category: 'infrastructure', title: 'Durable Firestore Persistence & Restore Verified', description: 'FIREBASE_SERVICE_ACCOUNT connected and state exported/tested.', verified: false },
-  { id: 'GL-05', category: 'security', title: 'Production Admin Password & Session Secret Set', description: 'Custom MRS_ADMIN_PASSWORD and 32+ char MRS_SESSION_SECRET configured.', verified: false },
+  { id: 'GL-05', category: 'security', title: 'Owner Admin Passcode Configured', description: 'MRS_ADMIN_PASSWORD set in Secrets or initial owner passcode claimed via scrypt setup.', verified: false },
   { id: 'GL-06', category: 'infrastructure', title: 'SMS Forwarder & Email Collectors Reporting', description: 'Live /api/ingest/sms and /api/ingest/email heartbeats confirmed.', verified: false },
   { id: 'GL-07', category: 'infrastructure', title: 'Gemini API Key Active & Tested', description: 'GEMINI_API_KEY configured and /api/admin/selftest?live=1 passes.', verified: false },
   { id: 'GL-08', category: 'infrastructure', title: 'HTTPS Domain & SSL Certificate Validated', description: 'TLS encryption verified on production domain.', verified: false },

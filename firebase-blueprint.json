@@ -394,7 +394,7 @@
     },
     "/config/{configId}": {
       "schema": "Settings",
-      "description": "System operational settings document"
+      "description": "System operational settings (system_settings, bridges) and persisted scrypt-hashed AdminAuth credentials (admin_auth)"
     },
     "/auditLog/{logId}": {
       "schema": "AuditLog",

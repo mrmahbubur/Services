@@ -5,7 +5,7 @@
 import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 
-const SESSION_SECRET = process.env.MRS_SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+const SESSION_SECRET = crypto.randomBytes(32).toString('hex');
 
 export function hashPin(pin: string): string {
   return crypto.createHash('sha256').update(pin.trim()).digest('hex');
