@@ -8,16 +8,17 @@ import {
   RefreshCw,
   Copy,
   Check,
-  CheckCheck,
   AlertTriangle,
 } from 'lucide-react';
+
+type StepStatus = 'passed' | 'failed' | 'skipped';
 
 interface PlaywrightMcpStepResult {
   stepId: string;
   name: string;
   description: string;
   durationMs: number;
-  status: 'passed' | 'failed' | 'skipped';
+  status: StepStatus;
   assertion: string;
   detail?: string;
 }
@@ -34,6 +35,35 @@ interface PlaywrightMcpRunReport {
   steps: PlaywrightMcpStepResult[];
   playwrightCliSnippet: string;
 }
+
+const STEP_STATUS_VISUALS: Record<
+  StepStatus,
+  {
+    cardClass: string;
+    badgeClass: string;
+    Icon: React.FC<{ className?: string }>;
+    iconClass: string;
+  }
+> = {
+  passed: {
+    cardClass: 'bg-[#0D1526]/80 border-slate-800',
+    badgeClass: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+    Icon: CheckCircle2,
+    iconClass: 'w-4 h-4 text-emerald-400 shrink-0 mt-0.5',
+  },
+  skipped: {
+    cardClass: 'bg-amber-500/10 border-amber-500/30',
+    badgeClass: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+    Icon: AlertTriangle,
+    iconClass: 'w-4 h-4 text-amber-400 shrink-0 mt-0.5',
+  },
+  failed: {
+    cardClass: 'bg-rose-500/10 border-rose-500/30',
+    badgeClass: 'bg-rose-500/20 text-rose-300 border-rose-500/30',
+    Icon: XCircle,
+    iconClass: 'w-4 h-4 text-rose-400 shrink-0 mt-0.5',
+  },
+};
 
 export const PlaywrightMcpConsole: React.FC = () => {
   const [report, setReport] = useState<PlaywrightMcpRunReport | null>(null);
@@ -65,6 +95,8 @@ export const PlaywrightMcpConsole: React.FC = () => {
       setTimeout(() => setCopiedCli(false), 2000);
     }
   };
+
+  const skippedCount = report?.steps.filter((s) => s.status === 'skipped').length ?? 0;
 
   return (
     <div className="space-y-6">
@@ -101,20 +133,33 @@ export const PlaywrightMcpConsole: React.FC = () => {
 
       {/* Summary Scorecard */}
       {report && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 font-mono text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 font-mono text-xs">
           <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1">
             <span className="text-slate-400 text-[10px] uppercase block">Total Scenarios</span>
             <span className="text-lg font-bold text-white">{report.totalTests}</span>
           </div>
 
           <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-1">
-            <span className="text-emerald-400 text-[10px] uppercase block">Passed Assertions</span>
-            <span className="text-lg font-bold text-emerald-400">{report.passed}</span>
+            <span className="text-emerald-400 text-[10px] uppercase flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" /> Passed
+            </span>
+            <span className="text-lg font-bold text-emerald-400 block">{report.passed}</span>
           </div>
 
-          <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1">
-            <span className="text-slate-400 text-[10px] uppercase block">Failed</span>
-            <span className={`text-lg font-bold ${report.failed > 0 ? 'text-rose-400' : 'text-slate-400'}`}>
+          <div className={`p-4 rounded-xl border space-y-1 ${skippedCount > 0 ? 'bg-amber-500/10 border-amber-500/30' : 'bg-slate-900/60 border-slate-800'}`}>
+            <span className={`${skippedCount > 0 ? 'text-amber-300' : 'text-slate-400'} text-[10px] uppercase flex items-center gap-1`}>
+              <Clock className="w-3 h-3" /> Skipped / Warn
+            </span>
+            <span className={`text-lg font-bold block ${skippedCount > 0 ? 'text-amber-300' : 'text-slate-400'}`}>
+              {skippedCount}
+            </span>
+          </div>
+
+          <div className={`p-4 rounded-xl border space-y-1 ${report.failed > 0 ? 'bg-rose-500/10 border-rose-500/30' : 'bg-slate-900/60 border-slate-800'}`}>
+            <span className={`${report.failed > 0 ? 'text-rose-300' : 'text-slate-400'} text-[10px] uppercase flex items-center gap-1`}>
+              <XCircle className="w-3 h-3" /> Failed
+            </span>
+            <span className={`text-lg font-bold block ${report.failed > 0 ? 'text-rose-400' : 'text-slate-400'}`}>
               {report.failed}
             </span>
           </div>
@@ -142,27 +187,15 @@ export const PlaywrightMcpConsole: React.FC = () => {
         {report?.steps ? (
           <div className="space-y-2">
             {report.steps.map((step) => {
-              const isPass = step.status === 'passed';
-              const isSkipped = step.status === 'skipped';
+              const visuals = STEP_STATUS_VISUALS[step.status] || STEP_STATUS_VISUALS.failed;
+              const { Icon } = visuals;
               return (
                 <div
                   key={step.stepId}
-                  className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                    isPass
-                      ? 'bg-[#0D1526]/80 border-slate-800'
-                      : isSkipped
-                      ? 'bg-amber-500/10 border-amber-500/30'
-                      : 'bg-rose-500/10 border-rose-500/30'
-                  }`}
+                  className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${visuals.cardClass}`}
                 >
                   <div className="flex items-start gap-3">
-                    {isPass ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                    ) : isSkipped ? (
-                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                    ) : (
-                      <XCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                    )}
+                    <Icon className={visuals.iconClass} />
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-xs text-white">{step.name}</span>
@@ -172,20 +205,18 @@ export const PlaywrightMcpConsole: React.FC = () => {
                       <code className="text-[10px] font-mono text-cyan-300 block bg-slate-950 px-2 py-1 rounded border border-slate-850">
                         {step.assertion}
                       </code>
+                      {step.detail && (
+                        <p className="text-[11px] font-mono text-slate-400/90 pt-0.5">{step.detail}</p>
+                      )}
                     </div>
                   </div>
 
                   <div className="flex sm:flex-col items-center sm:items-end justify-between gap-1 text-right shrink-0">
                     <span
-                      className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border uppercase ${
-                        isPass
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                          : isSkipped
-                          ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                          : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
-                      }`}
+                      className={`inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded border uppercase ${visuals.badgeClass}`}
                     >
-                      {step.status}
+                      <Icon className="w-3 h-3" />
+                      <span>{step.status}</span>
                     </span>
                     <span className="text-[10px] font-mono text-slate-500">{step.durationMs}ms</span>
                   </div>

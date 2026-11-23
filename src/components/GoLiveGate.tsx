@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   CheckCircle2,
-  Circle,
   ShieldCheck,
   AlertTriangle,
+  Clock,
+  XCircle,
   RefreshCw,
   ChevronRight,
   Info,
@@ -144,25 +145,49 @@ export const GoLiveGate: React.FC = () => {
       {/* Live Infrastructure Self-Test Matrix */}
       {selfTestStatus?.checks && (
         <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2.5 text-xs">
-          <div className="flex items-center gap-2 font-mono font-bold text-slate-200">
-            <Activity className="w-4 h-4 text-cyan-400" />
-            <span>Live Server Probe Diagnostics</span>
+          <div className="flex flex-wrap items-center justify-between gap-2 font-mono font-bold text-slate-200">
+            <div className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-cyan-400" />
+              <span>Live Server Probe Diagnostics</span>
+            </div>
+            <div className="flex items-center gap-2 text-[11px]">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                <CheckCircle2 className="w-3 h-3" /> {selfTestStatus.checks.filter((c) => c.ok).length} Pass
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                <AlertTriangle className="w-3 h-3" /> {selfTestStatus.checks.filter((c) => !c.ok).length} Warn / Skipped
+              </span>
+            </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 font-mono text-[11px]">
-            {selfTestStatus.checks.map((c) => (
-              <div
-                key={c.id}
-                className={`p-2.5 rounded-lg border ${
-                  c.ok ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-300' : 'border-amber-500/30 bg-amber-500/5 text-amber-300'
-                }`}
-              >
-                <div className="font-bold uppercase flex items-center gap-1.5">
-                  {c.ok ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> : <AlertTriangle className="w-3.5 h-3.5 shrink-0" />}
-                  <span>{c.id}: {c.ok ? 'PASS' : 'WARN / PENDING'}</span>
+            {selfTestStatus.checks.map((c) => {
+              const status = (c as { status?: string }).status || (c.ok ? 'pass' : 'warn');
+              const isPass = status === 'pass' || c.ok;
+              const isFail = status === 'fail';
+              const cardClass = isPass
+                ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-300'
+                : isFail
+                ? 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                : 'border-amber-500/30 bg-amber-500/5 text-amber-300';
+              const label = isPass ? 'PASS' : isFail ? 'FAIL' : status === 'skipped' ? 'SKIPPED' : 'WARN / PENDING';
+              return (
+                <div key={c.id} className={`p-2.5 rounded-lg border ${cardClass}`}>
+                  <div className="font-bold uppercase flex items-center gap-1.5">
+                    {isPass ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                    ) : isFail ? (
+                      <XCircle className="w-3.5 h-3.5 shrink-0" />
+                    ) : status === 'skipped' ? (
+                      <Clock className="w-3.5 h-3.5 shrink-0" />
+                    ) : (
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    )}
+                    <span>{c.id}: {label}</span>
+                  </div>
+                  <div className="text-slate-400 text-[10px] mt-0.5">{c.detail}</div>
                 </div>
-                <div className="text-slate-400 text-[10px] mt-0.5">{c.detail}</div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -180,7 +205,7 @@ export const GoLiveGate: React.FC = () => {
                 {item.verified ? (
                   <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
                 ) : (
-                  <Circle className="w-5 h-5 text-slate-600 hover:text-slate-400 shrink-0" />
+                  <Clock className="w-5 h-5 text-amber-400/80 shrink-0" />
                 )}
               </div>
               <div className="space-y-1">
@@ -206,8 +231,18 @@ export const GoLiveGate: React.FC = () => {
               </div>
             </div>
 
-            <div className="shrink-0 text-slate-500 hover:text-slate-300">
-              <ChevronRight className="w-4 h-4" />
+            <div className="flex items-center gap-2 shrink-0">
+              <span
+                className={`inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded border uppercase ${
+                  item.verified
+                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                    : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                }`}
+              >
+                {item.verified ? <CheckCircle2 className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                <span>{item.verified ? 'Verified' : 'Pending'}</span>
+              </span>
+              <ChevronRight className="w-4 h-4 text-slate-500 hover:text-slate-300" />
             </div>
           </div>
         ))}
