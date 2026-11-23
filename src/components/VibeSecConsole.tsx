@@ -65,7 +65,7 @@ export const VibeSecConsole: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              Zero client secrets, strict HMAC-SHA256 nonces, locked Firestore security rules, and nosniff / SAMEORIGIN HTTP headers.
+              Zero client secrets, ephemeral runtime HMAC-SHA256 session keys, locked Firestore security rules, and Partitioned / SameSite=None HTTPS cookies.
             </p>
           </div>
         </div>
