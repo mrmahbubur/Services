@@ -5,7 +5,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
-import { initializeApp, applicationDefault, cert } from 'firebase-admin/app';
+import { initializeApp, applicationDefault, cert, getApps, getApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { installMrsCore, FirestoreStore, FileStore } from './server/mrs-core/index.js';
 import { createGeminiClient } from './server/mrs-core/ai/client.js';
@@ -17,30 +17,60 @@ const __dirname = path.dirname(__filename);
 
 const ai: GoogleGenAI | null = createGeminiClient(process.env.GEMINI_API_KEY);
 
+function parseServiceAccountJson(raw: string): Record<string, any> {
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('{')) {
+    return JSON.parse(trimmed);
+  }
+  const decoded = Buffer.from(trimmed, 'base64').toString('utf8').trim();
+  return JSON.parse(decoded);
+}
+
 let db: any = null;
 let firebaseProjectId = '';
 let firebaseDbId = '';
 try {
-  const firebaseConfig = JSON.parse(fs.readFileSync('./firebase-applet-config.json', 'utf8'));
-  firebaseProjectId = firebaseConfig.projectId || '';
-  firebaseDbId = firebaseConfig.firestoreDatabaseId || '';
+  const configPath = path.join(__dirname, 'firebase-applet-config.json');
+  if (fs.existsSync(configPath)) {
+    const firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    firebaseProjectId = firebaseConfig.projectId || '';
+    firebaseDbId = firebaseConfig.firestoreDatabaseId || '';
+  }
+
+  const hasValidProject =
+    Boolean(firebaseProjectId) && firebaseProjectId !== 'remixed-project-id';
   const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT?.trim();
   const isGcpRuntime = Boolean(
-    process.env.K_SERVICE || process.env.GOOGLE_CLOUD_PROJECT || process.env.FUNCTION_TARGET
+    process.env.K_SERVICE ||
+      process.env.GOOGLE_CLOUD_PROJECT ||
+      process.env.FUNCTION_TARGET ||
+      process.env.CLOUD_RUN_JOB
   );
 
-  if (serviceAccount) {
-    const firebaseApp = initializeApp({
-      credential: cert(JSON.parse(serviceAccount)),
-      projectId: firebaseProjectId,
-    });
-    db = getFirestore(firebaseApp, firebaseDbId);
-  } else if (isGcpRuntime) {
-    const firebaseApp = initializeApp({
-      credential: applicationDefault(),
-      projectId: firebaseProjectId,
-    });
-    db = getFirestore(firebaseApp, firebaseDbId);
+  if (serviceAccount && hasValidProject) {
+    const parsedAccount = parseServiceAccountJson(serviceAccount);
+    const projectId = parsedAccount.project_id || firebaseProjectId;
+    const firebaseApp = getApps().length
+      ? getApp()
+      : initializeApp({
+          credential: cert(parsedAccount),
+          projectId,
+        });
+    db =
+      firebaseDbId && firebaseDbId !== '(default)'
+        ? getFirestore(firebaseApp, firebaseDbId)
+        : getFirestore(firebaseApp);
+  } else if (isGcpRuntime && hasValidProject) {
+    const firebaseApp = getApps().length
+      ? getApp()
+      : initializeApp({
+          credential: applicationDefault(),
+          projectId: firebaseProjectId,
+        });
+    db =
+      firebaseDbId && firebaseDbId !== '(default)'
+        ? getFirestore(firebaseApp, firebaseDbId)
+        : getFirestore(firebaseApp);
   } else {
     console.info(
       '[M R S Store] FIREBASE_SERVICE_ACCOUNT not set on external host; starting with durable local store (.mrs-data/store.json).'

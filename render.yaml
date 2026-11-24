@@ -29,5 +29,3 @@ services:
         generateValue: true
       - key: MRS_SMS_BEARER_TOKEN
         generateValue: true
-
-

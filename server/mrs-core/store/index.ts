@@ -188,12 +188,17 @@ function isPermissionOrAuthError(err: any): boolean {
   const code = err?.code;
   const msg = String(err?.message || err || '');
   return (
+    code === 4 ||
     code === 7 ||
+    code === 14 ||
     code === 16 ||
     code === 'ENOTFOUND' ||
     code === 'EAI_AGAIN' ||
     code === 'ETIMEDOUT' ||
-    /PERMISSION_DENIED|UNAUTHENTICATED|Missing or insufficient permissions|Could not load the default credentials|Could not refresh access token|metadata\.google\.internal|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|fetch failed|init_timeout/i.test(msg)
+    code === 'ECONNREFUSED' ||
+    code === 'ECONNRESET' ||
+    code === 'EHOSTUNREACH' ||
+    /PERMISSION_DENIED|UNAUTHENTICATED|DEADLINE_EXCEEDED|Missing or insufficient permissions|Could not load the default credentials|Could not refresh access token|metadata\.google\.internal|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ECONNREFUSED|fetch failed|init_timeout/i.test(msg)
   );
 }
 
@@ -213,17 +218,20 @@ export class FirestoreStore implements IStore {
     this.databaseId = opts?.databaseId;
   }
 
-  async init(): Promise<boolean> {
+  async init(timeoutMs = 5000): Promise<boolean> {
     if (!this.db) {
       this.cloudAvailable = false;
       return false;
     }
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const probePromise = this.db.collection(this.colName('config')).doc('system_settings').get();
+    // Prevent late unhandled rejection if the timeout wins Promise.race
+    probePromise.catch(() => {});
     try {
       await Promise.race([
-        this.db.collection(this.colName('config')).doc('system_settings').get(),
+        probePromise,
         new Promise((_, reject) => {
-          timer = setTimeout(() => reject(new Error('Firestore init_timeout after 5000ms')), 5000);
+          timer = setTimeout(() => reject(new Error(`Firestore init_timeout after ${timeoutMs}ms`)), timeoutMs);
         }),
       ]);
       this.cloudAvailable = true;
@@ -240,13 +248,16 @@ export class FirestoreStore implements IStore {
     }
   }
 
-  private tripCloudFallback(_err?: any) {
+  private tripCloudFallback(err?: any) {
     this.cloudAvailable = false;
     if (!this.loggedDegradedNotice) {
       this.loggedDegradedNotice = true;
       const target = [this.projectId, this.databaseId].filter(Boolean).join('/');
+      const reason = /init_timeout|DEADLINE_EXCEEDED|ETIMEDOUT/i.test(String(err?.message || err || ''))
+        ? 'Cloud Firestore connection timed out'
+        : 'Cloud Firestore Admin credentials lack access or are unavailable';
       console.info(
-        `[M R S Store] Cloud Firestore Admin ADC does not currently have IAM access (${target || 'default'}); using durable local persistence (.mrs-data/store.json). Set FIREBASE_SERVICE_ACCOUNT in Secrets to enable Cloud Firestore sync.`
+        `[M R S Store] ${reason} (${target || 'default'}); using durable local persistence (.mrs-data/store.json). Set FIREBASE_SERVICE_ACCOUNT in Secrets to enable Cloud Firestore sync.`
       );
     }
   }
