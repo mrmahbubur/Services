@@ -18,12 +18,42 @@ const __dirname = path.dirname(__filename);
 const ai: GoogleGenAI | null = createGeminiClient(process.env.GEMINI_API_KEY);
 
 function parseServiceAccountJson(raw: string): Record<string, any> {
-  const trimmed = raw.trim();
-  if (trimmed.startsWith('{')) {
-    return JSON.parse(trimmed);
+  let cleaned = raw.trim();
+  if (
+    (cleaned.startsWith('"') && cleaned.endsWith('"')) ||
+    (cleaned.startsWith("'") && cleaned.endsWith("'"))
+  ) {
+    cleaned = cleaned.slice(1, -1).trim();
   }
-  const decoded = Buffer.from(trimmed, 'base64').toString('utf8').trim();
-  return JSON.parse(decoded);
+  if (cleaned.startsWith('data:application/json;base64,')) {
+    cleaned = cleaned.slice('data:application/json;base64,'.length).trim();
+  }
+
+  let parsed: Record<string, any>;
+  if (cleaned.startsWith('{')) {
+    parsed = JSON.parse(cleaned);
+  } else {
+    const normalizedB64 = cleaned.replace(/-/g, '+').replace(/_/g, '/');
+    const decoded = Buffer.from(normalizedB64, 'base64').toString('utf8').trim();
+    if (!decoded.startsWith('{')) {
+      throw new Error('FIREBASE_SERVICE_ACCOUNT is neither valid JSON nor base64-encoded JSON.');
+    }
+    parsed = JSON.parse(decoded);
+  }
+
+  if (typeof parsed.private_key === 'string') {
+    parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
+  }
+  return parsed;
+}
+
+function getOrInitializeFirebaseApp(credential: any, projectId: string) {
+  return getApps().length
+    ? getApp()
+    : initializeApp({
+        credential,
+        projectId,
+      });
 }
 
 let db: any = null;
@@ -47,26 +77,20 @@ try {
       process.env.CLOUD_RUN_JOB
   );
 
-  if (serviceAccount && hasValidProject) {
+  if (serviceAccount) {
     const parsedAccount = parseServiceAccountJson(serviceAccount);
-    const projectId = parsedAccount.project_id || firebaseProjectId;
-    const firebaseApp = getApps().length
-      ? getApp()
-      : initializeApp({
-          credential: cert(parsedAccount),
-          projectId,
-        });
-    db =
-      firebaseDbId && firebaseDbId !== '(default)'
-        ? getFirestore(firebaseApp, firebaseDbId)
-        : getFirestore(firebaseApp);
+    const projectId =
+      parsedAccount.project_id || (hasValidProject ? firebaseProjectId : '');
+    if (projectId && projectId !== 'remixed-project-id') {
+      const firebaseApp = getOrInitializeFirebaseApp(cert(parsedAccount), projectId);
+      db =
+        firebaseDbId && firebaseDbId !== '(default)'
+          ? getFirestore(firebaseApp, firebaseDbId)
+          : getFirestore(firebaseApp);
+      firebaseProjectId = projectId;
+    }
   } else if (isGcpRuntime && hasValidProject) {
-    const firebaseApp = getApps().length
-      ? getApp()
-      : initializeApp({
-          credential: applicationDefault(),
-          projectId: firebaseProjectId,
-        });
+    const firebaseApp = getOrInitializeFirebaseApp(applicationDefault(), firebaseProjectId);
     db =
       firebaseDbId && firebaseDbId !== '(default)'
         ? getFirestore(firebaseApp, firebaseDbId)
