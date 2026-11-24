@@ -25,13 +25,16 @@ function parseServiceAccountJson(raw: string): Record<string, any> {
   ) {
     cleaned = cleaned.slice(1, -1).trim();
   }
-  cleaned = cleaned.replace(/^data:[^;]+(?:;[^;]+)*;base64,/i, '').trim();
+  cleaned = cleaned.replace(/^(?:data:[^,]*;)?base64[,:]\s*/i, '').trim();
 
   let parsed: Record<string, any>;
   if (cleaned.startsWith('{')) {
     parsed = JSON.parse(cleaned);
   } else {
-    const normalizedB64 = cleaned.replace(/-/g, '+').replace(/_/g, '/');
+    const normalizedB64 = cleaned
+      .replace(/-/g, '+')
+      .replace(/_/g, '/')
+      .replace(/\s+/g, '');
     const decoded = Buffer.from(normalizedB64, 'base64').toString('utf8').trim();
     if (!decoded.startsWith('{')) {
       throw new Error('FIREBASE_SERVICE_ACCOUNT is neither valid JSON nor base64-encoded JSON.');
