@@ -24,12 +24,28 @@ try {
   const firebaseConfig = JSON.parse(fs.readFileSync('./firebase-applet-config.json', 'utf8'));
   firebaseProjectId = firebaseConfig.projectId || '';
   firebaseDbId = firebaseConfig.firestoreDatabaseId || '';
-  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
-  const firebaseApp = initializeApp({
-    credential: serviceAccount ? cert(JSON.parse(serviceAccount)) : applicationDefault(),
-    projectId: firebaseProjectId,
-  });
-  db = getFirestore(firebaseApp, firebaseDbId);
+  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT?.trim();
+  const isGcpRuntime = Boolean(
+    process.env.K_SERVICE || process.env.GOOGLE_CLOUD_PROJECT || process.env.FUNCTION_TARGET
+  );
+
+  if (serviceAccount) {
+    const firebaseApp = initializeApp({
+      credential: cert(JSON.parse(serviceAccount)),
+      projectId: firebaseProjectId,
+    });
+    db = getFirestore(firebaseApp, firebaseDbId);
+  } else if (isGcpRuntime) {
+    const firebaseApp = initializeApp({
+      credential: applicationDefault(),
+      projectId: firebaseProjectId,
+    });
+    db = getFirestore(firebaseApp, firebaseDbId);
+  } else {
+    console.info(
+      '[M R S Store] FIREBASE_SERVICE_ACCOUNT not set on external host; starting with durable local store (.mrs-data/store.json).'
+    );
+  }
 } catch (e) {
   console.warn('Firebase admin initialization notice (using durable local store):', e);
 }
@@ -46,7 +62,7 @@ function getPort(): number {
     const val = Number(process.argv[portArgIndex + 1]);
     if (!isNaN(val) && val > 0) return val;
   }
-  if (process.env.NODE_ENV === 'production' && process.env.PORT) {
+  if (process.env.PORT) {
     const envPort = Number(process.env.PORT);
     if (!isNaN(envPort) && envPort > 0) return envPort;
   }
@@ -81,6 +97,9 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(__dirname, 'dist');
+    app.all('/api/*', (_req, res) => {
+      res.status(404).json({ error: 'API route not found' });
+    });
     app.use(express.static(distPath));
     app.get('*', (_req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));

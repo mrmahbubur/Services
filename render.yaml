@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: mrs-services-platform
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health/readiness
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: MRS_ADMIN_PASSWORD
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false
+      - key: OWNER_EMAIL
+        sync: false
+      - key: APP_URL
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MRS_INGEST_SECRET
+        generateValue: true
+      - key: MRS_SMS_SIGNING_KEY
+        generateValue: true
+      - key: MRS_CRON_SECRET
+        generateValue: true
+      - key: MRS_SMS_BEARER_TOKEN
+        generateValue: true
+
+

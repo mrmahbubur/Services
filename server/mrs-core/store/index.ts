@@ -190,7 +190,10 @@ function isPermissionOrAuthError(err: any): boolean {
   return (
     code === 7 ||
     code === 16 ||
-    /PERMISSION_DENIED|UNAUTHENTICATED|Missing or insufficient permissions|Could not load the default credentials/i.test(msg)
+    code === 'ENOTFOUND' ||
+    code === 'EAI_AGAIN' ||
+    code === 'ETIMEDOUT' ||
+    /PERMISSION_DENIED|UNAUTHENTICATED|Missing or insufficient permissions|Could not load the default credentials|Could not refresh access token|metadata\.google\.internal|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|fetch failed|init_timeout/i.test(msg)
   );
 }
 
@@ -215,8 +218,14 @@ export class FirestoreStore implements IStore {
       this.cloudAvailable = false;
       return false;
     }
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      await this.db.collection(this.colName('config')).doc('system_settings').get();
+      await Promise.race([
+        this.db.collection(this.colName('config')).doc('system_settings').get(),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error('Firestore init_timeout after 5000ms')), 5000);
+        }),
+      ]);
       this.cloudAvailable = true;
       return true;
     } catch (err) {
@@ -226,6 +235,8 @@ export class FirestoreStore implements IStore {
       }
       // Transient error during startup check: remain enabled and retry on demand
       return this.cloudAvailable;
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }
 

@@ -651,7 +651,7 @@ export function installMrsCore(app: Express, options: MrsCoreOptions = {}) {
   });
 
   app.get('/robots.txt', (req: Request, res: Response) => {
-    const origin = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+    const origin = process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || `${req.protocol}://${req.get('host')}`;
     res.type('text/plain').send(
       [
         'User-agent: *',
@@ -664,7 +664,7 @@ export function installMrsCore(app: Express, options: MrsCoreOptions = {}) {
   });
 
   app.get('/sitemap.xml', async (req: Request, res: Response) => {
-    const origin = (process.env.APP_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
+    const origin = (process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
     const staticPaths = [
       '/',
       '/services',
