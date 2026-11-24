@@ -525,7 +525,7 @@ export async function verifySubmissionWithBackendAi(params: {
   // -------------------------------------------------------------------------
   // STEP 3: Gemini Vision Document Reading (+ Reference Samples & Untrusted Guard)
   // -------------------------------------------------------------------------
-  const dataUrlMatch = latestEvidence.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  const dataUrlMatch = latestEvidence.dataUrl.match(/^data:([^,;]+)(?:;[^,;]*)*;base64,(.+)$/i);
   if (!dataUrlMatch) {
     anomalies.push('malformed_evidence_data');
     return {

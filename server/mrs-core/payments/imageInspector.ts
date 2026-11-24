@@ -52,7 +52,7 @@ export async function inspectAndSanitizeEvidence(
   const minWidth = opts.minWidth ?? 160;
   const minHeight = opts.minHeight ?? 160;
 
-  const cleanB64 = String(rawBase64 || '').replace(/^data:[^;]+;base64,/, '');
+  const cleanB64 = String(rawBase64 || '').replace(/^data:(?:[^,;]*;)*\s*base64,\s*/i, '');
   const buf = Buffer.from(cleanB64, 'base64');
   if (buf.length === 0) {
     throw new Error('Uploaded receipt file is empty.');
