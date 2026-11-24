@@ -25,9 +25,7 @@ function parseServiceAccountJson(raw: string): Record<string, any> {
   ) {
     cleaned = cleaned.slice(1, -1).trim();
   }
-  if (cleaned.startsWith('data:application/json;base64,')) {
-    cleaned = cleaned.slice('data:application/json;base64,'.length).trim();
-  }
+  cleaned = cleaned.replace(/^data:[^;]+(?:;[^;]+)*;base64,/i, '').trim();
 
   let parsed: Record<string, any>;
   if (cleaned.startsWith('{')) {
