@@ -23,7 +23,12 @@ import {
   getLearnedShapeSuggestions,
   GENERIC_CLIENT_CORRECTION_MSG,
 } from './payments/aiVerifier.js';
-import { inspectAndSanitizeEvidence, detectMagicMime } from './payments/imageInspector.js';
+import {
+  inspectAndSanitizeEvidence,
+  detectMagicMime,
+  stripBase64DataUriPrefix,
+  parseBase64DataUrl,
+} from './payments/imageInspector.js';
 import { sendActivationOrVerificationEmail } from './payments/mailer.js';
 import { parseOperatorSms, parsePaymentEmail } from './payments/readers.js';
 import { processOrderJob } from './fulfilment/engine.js';
@@ -846,7 +851,7 @@ export function installMrsCore(app: Express, options: MrsCoreOptions = {}) {
     if (!base64Content || typeof base64Content !== 'string') {
       return res.status(400).json({ success: false, error: 'base64Content is required for real file storage.' });
     }
-    const cleanB64 = base64Content.replace(/^data:(?:[^,;]*;)*\s*base64,\s*/i, '');
+    const cleanB64 = stripBase64DataUriPrefix(base64Content);
     const buf = Buffer.from(cleanB64, 'base64');
     if (buf.length > 25 * 1024 * 1024) {
       return res.status(400).json({ success: false, error: 'File exceeds 25 MB limit.' });
@@ -1753,7 +1758,7 @@ Respond as JSON with exact keys:
     if (!fileName || !base64Data) {
       return res.status(400).json({ success: false, error: 'File name and base64Data are required' });
     }
-    const cleanB64 = String(base64Data).replace(/^data:(?:[^,;]*;)*\s*base64,\s*/i, '');
+    const cleanB64 = stripBase64DataUriPrefix(String(base64Data));
     const fileId = `FILE-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
     const fileEntry = { field: field || 'attachment', fileName, fileId, uploadedAt: new Date().toISOString() };
     const files = [...(order.files || []), fileEntry];
@@ -2663,7 +2668,7 @@ Reply concisely and helpfully.`;
     if (!title && !fileName) return res.status(400).json({ error: 'Deliverable title or fileName required' });
 
     const b64 = base64Data
-      ? String(base64Data).replace(/^data:(?:[^,;]*;)*\s*base64,\s*/i, '')
+      ? stripBase64DataUriPrefix(String(base64Data))
       : Buffer.from(String(content || summary || title || ''), 'utf8').toString('base64');
 
     const invoices = await store.list<InvoiceRecord>('invoices', (i) => i.orderId === order.id);
@@ -2899,10 +2904,10 @@ Reply concisely and helpfully.`;
     const idx = Math.max(0, Number(req.params.n) - 1);
     const ev = payment.evidenceFiles?.[idx];
     if (!ev || !ev.dataUrl) return res.status(404).json({ error: 'Evidence file not found' });
-    const match = ev.dataUrl.match(/^data:([^,;]+)(?:;[^,;]*)*;base64,(.+)$/i);
-    if (!match) return res.status(404).json({ error: 'Invalid evidence data' });
-    res.setHeader('Content-Type', match[1]);
-    return res.send(Buffer.from(match[2], 'base64'));
+    const parsedEvidence = parseBase64DataUrl(ev.dataUrl);
+    if (!parsedEvidence) return res.status(404).json({ error: 'Invalid evidence data' });
+    res.setHeader('Content-Type', parsedEvidence.mimeType);
+    return res.send(Buffer.from(parsedEvidence.base64Data, 'base64'));
   });
 
   app.post('/api/admin/payments/:id/verify', adminAuth, async (req: Request, res: Response) => {

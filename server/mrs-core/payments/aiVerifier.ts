@@ -25,7 +25,7 @@ import {
   ShapePatternRecord,
 } from '../types.js';
 import { normalizeTrx } from './matcher.js';
-import { areHashesPerceptuallySimilar } from './imageInspector.js';
+import { areHashesPerceptuallySimilar, parseBase64DataUrl } from './imageInspector.js';
 import { IStore } from '../store/index.js';
 import { resolveGeminiModel, generateWithRetry } from '../ai/client.js';
 
@@ -525,8 +525,8 @@ export async function verifySubmissionWithBackendAi(params: {
   // -------------------------------------------------------------------------
   // STEP 3: Gemini Vision Document Reading (+ Reference Samples & Untrusted Guard)
   // -------------------------------------------------------------------------
-  const dataUrlMatch = latestEvidence.dataUrl.match(/^data:([^,;]+)(?:;[^,;]*)*;base64,(.+)$/i);
-  if (!dataUrlMatch) {
+  const parsedEvidenceData = parseBase64DataUrl(latestEvidence.dataUrl);
+  if (!parsedEvidenceData) {
     anomalies.push('malformed_evidence_data');
     return {
       decision: 'rejected',
@@ -539,8 +539,7 @@ export async function verifySubmissionWithBackendAi(params: {
       reasons: ['Malformed payment document payload.'],
     };
   }
-  const mimeType = dataUrlMatch[1];
-  const base64Data = dataUrlMatch[2];
+  const { mimeType, base64Data } = parsedEvidenceData;
 
   // Fetch up to 2 genuine reference samples uploaded by owner for visual style matching
   const refSamples = await store.list<ReferenceSampleRecord>(

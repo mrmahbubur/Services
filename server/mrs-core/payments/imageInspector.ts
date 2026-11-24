@@ -45,6 +45,30 @@ export function areHashesPerceptuallySimilar(hashA?: string, hashB?: string, max
   }
 }
 
+export const DATA_URI_BASE64_PREFIX_RE =
+  /^\s*data:(?:[^,;]*;)*\s*base64(?:\s*;[^,;]*)*\s*,\s*/i;
+
+export const DATA_URI_BASE64_MATCH_RE =
+  /^\s*data:([^,;]*)(?:;[^,;]*)*;\s*base64(?:\s*;[^,;]*)*\s*,\s*([\s\S]+)$/i;
+
+export function stripBase64DataUriPrefix(raw: string): string {
+  return String(raw || '')
+    .trim()
+    .replace(DATA_URI_BASE64_PREFIX_RE, '')
+    .replace(/\s+/g, '');
+}
+
+export function parseBase64DataUrl(
+  dataUrl: string
+): { mimeType: string; base64Data: string } | null {
+  const match = String(dataUrl || '').match(DATA_URI_BASE64_MATCH_RE);
+  if (!match) return null;
+  const mimeType = match[1].trim() || 'application/octet-stream';
+  const base64Data = match[2].replace(/\s+/g, '');
+  if (!base64Data) return null;
+  return { mimeType, base64Data };
+}
+
 export async function inspectAndSanitizeEvidence(
   rawBase64: string,
   opts: { minWidth?: number; minHeight?: number } = {}
@@ -52,7 +76,7 @@ export async function inspectAndSanitizeEvidence(
   const minWidth = opts.minWidth ?? 160;
   const minHeight = opts.minHeight ?? 160;
 
-  const cleanB64 = String(rawBase64 || '').replace(/^data:(?:[^,;]*;)*\s*base64,\s*/i, '');
+  const cleanB64 = stripBase64DataUriPrefix(rawBase64);
   const buf = Buffer.from(cleanB64, 'base64');
   if (buf.length === 0) {
     throw new Error('Uploaded receipt file is empty.');
