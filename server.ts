@@ -9,10 +9,7 @@ import { initializeApp, applicationDefault, cert, getApps, getApp } from 'fireba
 import { getFirestore } from 'firebase-admin/firestore';
 import { installMrsCore, FirestoreStore, FileStore } from './server/mrs-core/index.js';
 import { createGeminiClient } from './server/mrs-core/ai/client.js';
-import {
-  ANY_BASE64_PREFIX_RE,
-  stripBase64DataUriPrefix,
-} from './server/mrs-core/utils/dataUri.js';
+import { decodeBase64JsonPayload } from './server/mrs-core/utils/dataUri.js';
 
 dotenv.config();
 
@@ -22,30 +19,7 @@ const __dirname = path.dirname(__filename);
 const ai: GoogleGenAI | null = createGeminiClient(process.env.GEMINI_API_KEY);
 
 function parseServiceAccountJson(raw: string): Record<string, any> {
-  let cleaned = raw.trim();
-  if (
-    (cleaned.startsWith('"') && cleaned.endsWith('"')) ||
-    (cleaned.startsWith("'") && cleaned.endsWith("'"))
-  ) {
-    cleaned = cleaned.slice(1, -1).trim();
-  }
-  cleaned = cleaned.replace(ANY_BASE64_PREFIX_RE, '').trim();
-
-  let parsed: Record<string, any>;
-  if (cleaned.startsWith('{')) {
-    parsed = JSON.parse(cleaned);
-  } else {
-    const normalizedB64 = stripBase64DataUriPrefix(cleaned, {
-      allowBarePrefix: true,
-      normalizeUrlSafe: true,
-    });
-    const decoded = Buffer.from(normalizedB64, 'base64').toString('utf8').trim();
-    if (!decoded.startsWith('{')) {
-      throw new Error('FIREBASE_SERVICE_ACCOUNT is neither valid JSON nor base64-encoded JSON.');
-    }
-    parsed = JSON.parse(decoded);
-  }
-
+  const parsed = decodeBase64JsonPayload(raw);
   if (typeof parsed.private_key === 'string') {
     parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
   }

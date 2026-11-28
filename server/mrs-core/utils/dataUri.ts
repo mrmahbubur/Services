@@ -47,3 +47,28 @@ export function parseBase64DataUrl(
   if (!base64Data) return null;
   return { mimeType, base64Data };
 }
+
+export function decodeBase64JsonPayload(raw: string): Record<string, any> {
+  let cleaned = String(raw || '').trim();
+  if (
+    (cleaned.startsWith('"') && cleaned.endsWith('"')) ||
+    (cleaned.startsWith("'") && cleaned.endsWith("'"))
+  ) {
+    cleaned = cleaned.slice(1, -1).trim();
+  }
+  cleaned = cleaned.replace(ANY_BASE64_PREFIX_RE, '').trim();
+
+  if (cleaned.startsWith('{')) {
+    return JSON.parse(cleaned);
+  }
+
+  const normalizedB64 = stripBase64DataUriPrefix(cleaned, {
+    allowBarePrefix: true,
+    normalizeUrlSafe: true,
+  });
+  const decoded = Buffer.from(normalizedB64, 'base64').toString('utf8').trim();
+  if (!decoded.startsWith('{')) {
+    throw new Error('Payload is neither valid JSON nor base64-encoded JSON.');
+  }
+  return JSON.parse(decoded);
+}
