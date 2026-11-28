@@ -9,7 +9,7 @@ import { initializeApp, applicationDefault, cert, getApps, getApp } from 'fireba
 import { getFirestore } from 'firebase-admin/firestore';
 import { installMrsCore, FirestoreStore, FileStore } from './server/mrs-core/index.js';
 import { createGeminiClient } from './server/mrs-core/ai/client.js';
-import { decodeBase64JsonPayload } from './server/mrs-core/utils/dataUri.js';
+import { parseServiceAccountJson } from './server/mrs-core/utils/dataUri.js';
 
 dotenv.config();
 
@@ -17,14 +17,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const ai: GoogleGenAI | null = createGeminiClient(process.env.GEMINI_API_KEY);
-
-function parseServiceAccountJson(raw: string): Record<string, any> {
-  const parsed = decodeBase64JsonPayload(raw);
-  if (typeof parsed.private_key === 'string') {
-    parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
-  }
-  return parsed;
-}
 
 function getOrInitializeFirebaseApp(credential: any, projectId: string) {
   return getApps().length

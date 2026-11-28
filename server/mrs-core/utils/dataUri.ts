@@ -72,3 +72,11 @@ export function decodeBase64JsonPayload(raw: string): Record<string, any> {
   }
   return JSON.parse(decoded);
 }
+
+export function parseServiceAccountJson(raw: string): Record<string, any> {
+  const parsed = decodeBase64JsonPayload(raw);
+  if (typeof parsed.private_key === 'string') {
+    parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
+  }
+  return parsed;
+}
