@@ -25,7 +25,8 @@ import {
   ShapePatternRecord,
 } from '../types.js';
 import { normalizeTrx } from './matcher.js';
-import { areHashesPerceptuallySimilar, parseBase64DataUrl } from './imageInspector.js';
+import { areHashesPerceptuallySimilar } from './imageInspector.js';
+import { parseBase64DataUrl } from '../utils/dataUri.js';
 import { IStore } from '../store/index.js';
 import { resolveGeminiModel, generateWithRetry } from '../ai/client.js';
 

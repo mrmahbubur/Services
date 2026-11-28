@@ -23,12 +23,8 @@ import {
   getLearnedShapeSuggestions,
   GENERIC_CLIENT_CORRECTION_MSG,
 } from './payments/aiVerifier.js';
-import {
-  inspectAndSanitizeEvidence,
-  detectMagicMime,
-  stripBase64DataUriPrefix,
-  parseBase64DataUrl,
-} from './payments/imageInspector.js';
+import { inspectAndSanitizeEvidence, detectMagicMime } from './payments/imageInspector.js';
+import { stripBase64DataUriPrefix, parseBase64DataUrl } from './utils/dataUri.js';
 import { sendActivationOrVerificationEmail } from './payments/mailer.js';
 import { parseOperatorSms, parsePaymentEmail } from './payments/readers.js';
 import { processOrderJob } from './fulfilment/engine.js';
